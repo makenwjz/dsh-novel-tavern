@@ -24,7 +24,7 @@ import type {} from '@deepseek-ai/dsh-llm'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import { activateEntries, parseLorebook } from './lorebook.ts'
 import { extractEmbeddedWorldBook, parseCharacterJson, parseCharacterPng, parseCharacterPngRaw } from './character.ts'
-import { foldBinding, recentText, renderTavernSection } from './section.ts'
+import { applyPromptScripts, foldBinding, hasOpeningMessage, recentText, renderTavernSection, type PromptScript } from './section.ts'
 import type {
   ActivatedLore,
   CardScore,
@@ -195,7 +195,17 @@ export class TavernService extends Service {
             ? binding.characterIds.map(id => this.characterProfile(id))
             : (binding.characterId === null ? [] : [this.characterProfile(binding.characterId)])
           const activated = this.activatedLore(binding, recentText(session.events, this.activationTextLimit))
-          return renderTavernSection({ binding, characters, activated, lean: this.lean })
+          const rendered = renderTavernSection({
+            binding,
+            characters,
+            activated,
+            lean: this.lean,
+            openingPresent: hasOpeningMessage(session.events),
+            ...(binding.mvuVariables === undefined ? {} : { mvuVariables: binding.mvuVariables }),
+          })
+          // The card's prompt-side regex scripts hide variable machinery from
+          // the model (e.g. "变量更新对AI不可见") and trim repetitive text.
+          return applyPromptScripts(rendered, this.promptScriptsFor(binding))
         } catch (error) {
           // A tampered store must not take down every turn: degrade to an
           // empty section and let the invariant companion fail the boot.
@@ -304,6 +314,36 @@ export class TavernService extends Service {
   }
 
   /**
+   * Toggle one worldbook entry's `enabled` flag in the stored file, so the
+   * manual per-entry switch persists across sessions (SillyTavern's book
+   * editor behaves the same way). The card frontend's session-level overrides
+   * continue to apply on top of this.
+   * @param id - the worldbook id.
+   * @param entryName - the entry's display name (or comment fallback).
+   * @param enabled - the new enabled state.
+   * @returns true when the entry was updated.
+   * @throws when the worldbook or entry is missing.
+   */
+  setWorldBookEntryEnabled(id: WorldBookId, entryName: string, enabled: boolean): boolean {
+    validateId('worldbook', id)
+    const file = join(this.root, 'worldbooks', `${id}.json`)
+    if (!existsSync(file)) throw new Error(`tavern: worldbook ${JSON.stringify(id)} not found`)
+    const raw = JSON.parse(readFileSync(file, 'utf-8')) as { entries?: Array<Record<string, unknown>> }
+    if (!Array.isArray(raw.entries)) throw new Error(`tavern: worldbook ${JSON.stringify(id)} has no entries array`)
+    let found = false
+    for (const row of raw.entries) {
+      if (typeof row !== 'object' || row === null) continue
+      const name = row.name ?? row.comment ?? ''
+      if (name !== entryName) continue
+      row.enabled = enabled
+      found = true
+    }
+    if (!found) throw new Error(`tavern: worldbook ${JSON.stringify(id)} has no entry named ${JSON.stringify(entryName)}`)
+    writeFileSync(file, JSON.stringify(raw, null, 2))
+    return true
+  }
+
+  /**
    * Load one character card.
    * @param id - the character id.
    * @returns the projected profile.
@@ -384,6 +424,31 @@ export class TavernService extends Service {
     return extensions !== null && typeof extensions === 'object' && !Array.isArray(extensions)
       ? extensions as Record<string, unknown>
       : {}
+  }
+
+  /** The prompt-side (`promptOnly`) regex scripts of the binding's first
+   *  character card, applied to the rendered section so variable machinery
+   *  stays invisible to the model. */
+  private promptScriptsFor(binding: TavernBindingData): PromptScript[] {
+    const id = (binding.characterIds ?? (binding.characterId === null ? [] : [binding.characterId]))[0]
+    if (id === undefined) return []
+    const view = this.listCharacters().find(card => card.id === id)
+    if (view === undefined) return []
+    const extensions = this.characterExtensions(view.id, view.format)
+    const regexes = extensions.regex_scripts
+    if (!Array.isArray(regexes)) return []
+    const scripts: PromptScript[] = []
+    for (const item of regexes) {
+      if (typeof item !== 'object' || item === null) continue
+      const row = item as Record<string, unknown>
+      scripts.push({
+        findRegex: typeof row.findRegex === 'string' ? row.findRegex : '',
+        replaceString: typeof row.replaceString === 'string' ? row.replaceString : '',
+        enabled: row.disabled !== true,
+        promptOnly: row.promptOnly === true,
+      })
+    }
+    return scripts
   }
 
   /**
@@ -493,6 +558,64 @@ export class TavernService extends Service {
     const binding = foldBinding(session.events)
     if (binding === null) throw new Error(`tavern: session ${JSON.stringify(sessionId)} has no binding`)
     const next: TavernBindingData = { ...binding, stage: (binding.stage ?? 0) + 1 }
+    session.append('tavern/binding', next)
+    return next
+  }
+
+  /**
+   * Write the character's opening message into the session log as the first
+   * assistant message, so the model continues from it instead of being told to
+   * re-open with the card's `first_mes` (the prompt section detects the opening
+   * and skips that instruction). SillyTavern behaves this way: the greeting is
+   * a real first message.
+   * @param sessionId - the attached session to open.
+   * @param greeting - the opening message text (e.g. a card greeting).
+   * @returns true when the opening was written.
+   * @throws when the session is unattached, the greeting is blank, the opening
+   * was already written, or the conversation already has a user message.
+   */
+  setGreeting(sessionId: string, greeting: string): boolean {
+    const session = this.ctx.sessions.get(sessionId as SessionId)
+    if (session === undefined) throw new Error(`tavern: session ${JSON.stringify(sessionId)} is not attached`)
+    const text = greeting.trim()
+    if (text.length === 0) throw new Error('tavern: greeting must not be empty')
+    if (hasOpeningMessage(session.events)) throw new Error('tavern: the opening message is already written to this session')
+    let sawUser = false
+    for (const event of session.events) {
+      if (event.type !== 'user/message') continue
+      const source = (event.data as { source?: { kind?: string } } | undefined)?.source
+      if (source?.kind === 'user') sawUser = true
+    }
+    if (sawUser) throw new Error('tavern: the conversation already started; the opening can only be written before the first user message')
+    session.append('assistant/message', {
+      turn: 0,
+      step: 0,
+      message: {
+        id: `opening-${randomUUID()}` as never,
+        role: 'assistant',
+        content: [{ type: 'text', text }],
+        source: { kind: 'model', provider: 'dsh-tavern', model: 'opening' },
+      },
+    }, { surfaceOp: 'append' })
+    return true
+  }
+
+  /**
+   * Replace one session's MVU variable state (SillyTavern card variables).
+   * The values are injected into the prompt as `## 角色状态`; the card
+   * frontend updates them through the bridge and the model through
+   * `<json_patch>` blocks.
+   * @param sessionId - the attached session to update.
+   * @param variables - the new flat variable map.
+   * @returns the new binding.
+   * @throws when the session is unattached or carries no binding.
+   */
+  setMvuVariables(sessionId: string, variables: Record<string, string>): TavernBindingData {
+    const session = this.ctx.sessions.get(sessionId as SessionId)
+    if (session === undefined) throw new Error(`tavern: session ${JSON.stringify(sessionId)} is not attached`)
+    const binding = foldBinding(session.events)
+    if (binding === null) throw new Error(`tavern: session ${JSON.stringify(sessionId)} has no binding`)
+    const next: TavernBindingData = { ...binding, mvuVariables: { ...variables } }
     session.append('tavern/binding', next)
     return next
   }

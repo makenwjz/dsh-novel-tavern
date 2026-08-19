@@ -57,6 +57,34 @@ export function recentText(events: readonly SessionEvent[], limit: number): stri
   return parts.join('\n').slice(-limit)
 }
 
+/** Parse one SillyTavern regex-script find pattern (bare or `/pattern/flags`). */
+function parseFindRegex(findRegex: string): { pattern: string; flags: string } {
+  const slashed = findRegex.match(/^\/([\s\S]*)\/([dgimsuvy]*)\s*$/)
+  if (slashed !== null && slashed[1] !== undefined) {
+    return { pattern: slashed[1], flags: slashed[2] ?? 'g' }
+  }
+  return { pattern: findRegex, flags: 'g' }
+}
+
+/** One prompt-side regex script from a card's `regex_scripts` extension. */
+export type PromptScript = { findRegex: string; replaceString: string; enabled: boolean; promptOnly: boolean }
+
+/** Apply a card's prompt-side (`promptOnly`) regex scripts to the rendered
+ *  section text, the way SillyTavern post-processes the prompt: scripts that
+ *  hide variable machinery from the model (e.g. "变量更新对AI不可见") or trim
+ *  repetitive text run here. Malformed regexes are skipped. */
+export function applyPromptScripts(text: string, scripts: readonly PromptScript[]): string {
+  let out = text
+  for (const script of scripts) {
+    if (!script.enabled || !script.promptOnly || script.findRegex.length === 0) continue
+    try {
+      const { pattern, flags } = parseFindRegex(script.findRegex)
+      out = out.replace(new RegExp(pattern, flags), script.replaceString)
+    } catch { /* malformed regex: leave the text untouched */ }
+  }
+  return out
+}
+
 /** One rendered character-card line; empty fields emit nothing. */
 function fieldLine(label: string, value: string): string {
   return value.length === 0 ? '' : `- ${label}: ${value}\n`
@@ -86,15 +114,40 @@ function substituteProfile(profile: CharacterProfile): CharacterProfile {
   }
 }
 
-/** Render one character's full block (name, fields, status, opener). */
-function fullCharacterBlock(character: CharacterProfile, lean: boolean, loreBlock: string): string {
-  const firstMes = character.firstMes.length === 0
+/** Whether the session log already contains the character's opening message
+ *  (an assistant message before the first user message). When true, the prompt
+ *  section must not force the card's `first_mes` again — the scene already
+ *  opened and the model continues from it. */
+export function hasOpeningMessage(events: readonly SessionEvent[]): boolean {
+  let sawUser = false
+  for (const event of events) {
+    if (event.type === 'user/message') {
+      const source = (event.data as { source?: { kind?: string } } | undefined)?.source
+      if (source?.kind === 'user') sawUser = true
+      continue
+    }
+    if (event.type === 'assistant/message' && !sawUser) return true
+  }
+  return false
+}
+
+/** Render one character's full block (name, fields, status, opener). Session
+ *  MVU variables override the card's initial variables when both name a key. */
+function fullCharacterBlock(
+  character: CharacterProfile,
+  lean: boolean,
+  loreBlock: string,
+  openingPresent: boolean,
+  sessionMvu: Readonly<Record<string, string>> = {},
+): string {
+  const firstMes = character.firstMes.length === 0 || openingPresent
     ? ''
     : `\n本对话必须以上述角色的开场白开始：\n${character.firstMes}\n`
-  const mvuBlock = lean || Object.keys(character.mvuVariables).length === 0
+  const mvu = { ...character.mvuVariables, ...sessionMvu }
+  const mvuBlock = lean || Object.keys(mvu).length === 0
     ? ''
     : '## 角色状态\n'
-      + Object.entries(character.mvuVariables).map(([key, value]) => `- ${key}: ${value}`).join('\n')
+      + Object.entries(mvu).map(([key, value]) => `- ${key}: ${value}`).join('\n')
       + '\n'
   if (lean) {
     const intro = character.description.length === 0 ? '' : `- 人物介绍: ${character.description}\n`
@@ -124,6 +177,10 @@ function extraCharacterBlock(character: CharacterProfile): string {
  * several for multi-character mode; empty in novel mode).
  * @param input.lean - trim each character block to its name, description, and
  * first message to cut per-turn tokens (public-kiosk friendly).
+ * @param input.openingPresent - the session log already carries the character's
+ * opening message, so the first_mes instruction is skipped.
+ * @param input.mvuVariables - the session's MVU variable state, overriding the
+ * card's initial variables.
  * @returns the section text, or the empty string when nothing injects.
  */
 export function renderTavernSection(input: {
@@ -131,6 +188,8 @@ export function renderTavernSection(input: {
   characters: CharacterProfile[]
   activated: ActivatedLore[]
   lean?: boolean
+  openingPresent?: boolean
+  mvuVariables?: Readonly<Record<string, string>>
 }): string {
   const lean = input.lean === true
   const entries = input.activated.filter(item => item.entry.content.length > 0)
@@ -142,7 +201,7 @@ export function renderTavernSection(input: {
   if (input.binding.mode === 'novel' || input.characters.length === 0) return loreBlock
   const substituted = input.characters.map(character => substituteProfile(character))
   if (substituted.length === 1) {
-    return fullCharacterBlock(substituted[0]!, lean, loreBlock)
+    return fullCharacterBlock(substituted[0]!, lean, loreBlock, input.openingPresent === true, input.mvuVariables)
   }
   const blocks = substituted.map(character => extraCharacterBlock(character))
   return `${blocks.join('\n')}\n${loreBlock}`

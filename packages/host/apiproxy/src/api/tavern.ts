@@ -46,6 +46,9 @@ export interface TavernApi {
   /** Delete a lorebook, failing loud while any session's binding references it. */
   deleteWorldBook(request: RpcRequest<{ id: WorldBookId }>): Promise<RpcResponse<{ deleted: true }>>
 
+  /** Toggle one worldbook entry's enabled flag in the stored file. */
+  setWorldBookEntryEnabled(request: RpcRequest<{ id: WorldBookId; entryName: string; enabled: boolean }>): Promise<RpcResponse<{ updated: true }>>
+
   /** List the imported character cards in name order. */
   listCharacters(request: RpcRequest<{}>): Promise<RpcResponse<{ characters: TavernCharacterView[] }>>
 
@@ -93,6 +96,21 @@ export interface TavernApi {
    * @returns the resulting binding.
    */
   advanceStage(request: RpcRequest<{ sessionId: SessionId }>): Promise<RpcResponse<{ binding: TavernBindingWire }>>
+
+  /**
+   * Write the character's opening message into the session log as its first
+   * assistant message (the model continues from it).
+   * @returns `{ appended: true }` when the opening was written.
+   */
+  setGreeting(request: RpcRequest<{ sessionId: SessionId; greeting: string }>): Promise<RpcResponse<{ appended: true }>>
+
+  /**
+   * Replace one session's MVU variable state (card variables injected into the
+   * prompt). The card frontend drives it via the bridge; the model via
+   * `<json_patch>` blocks.
+   * @returns the resulting binding.
+   */
+  setMvu(request: RpcRequest<{ sessionId: SessionId; variables: Record<string, string> }>): Promise<RpcResponse<{ binding: TavernBindingWire }>>
 
   /**
    * Model-assess one character card's quality through the LLM service.

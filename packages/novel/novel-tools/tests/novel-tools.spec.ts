@@ -80,13 +80,17 @@ describe('novel tools registration', () => {
       'decision_list',
       'chapter_info',
       'novel_lint',
+      'chapter_context',
+      'manuscript_check',
+      'manuscript_scan',
+      'chapter_workflow',
     ])
   })
 
   it('hides the lint tool when includeLintTool is false', async () => {
     const ctx = await setup(false)
     expect(ctx.tools.schemas().map(schema => schema.name)).not.toContain('novel_lint')
-    expect(ctx.tools.schemas()).toHaveLength(23)
+    expect(ctx.tools.schemas()).toHaveLength(27)
   })
 
   const VALID_ARGS: Record<string, unknown> = {
@@ -114,6 +118,10 @@ describe('novel tools registration', () => {
     decision_list: {},
     chapter_info: { number: 1, title: 'T' },
     novel_lint: { text: 'x' },
+    chapter_context: { chapter: 1 },
+    manuscript_check: { chapter: 1 },
+    manuscript_scan: { chapter: 1 },
+    chapter_workflow: { chapter: 1 },
   }
 
   it.each([
@@ -124,6 +132,7 @@ describe('novel tools registration', () => {
     'vow_plant',
     'vow_advance', 'vow_payoff', 'vow_abandon', 'vow_list',
     'decision_record', 'decision_list', 'chapter_info',
+    'chapter_context', 'manuscript_check', 'manuscript_scan', 'chapter_workflow',
   ])('reports the missing runtime for %s when the service is not mounted', async (name) => {
     const ctx = await setup(true, false)
     const result = await call(ctx, name, VALID_ARGS[name])
@@ -566,5 +575,50 @@ describe('presentation and edge states', () => {
     })
     expect(chapter.mustConceal).toBe('the blade')
     expect(chapter.mayHint).toBe('smoke')
+  })
+})
+
+describe('writing-assist tools', () => {
+  it('gathers one chapter context: world, lore, pending vows, and drafts', async () => {
+    const ctx = await setup()
+    await value(ctx, 'world_subject', { kind: 'character', name: 'Aya', summary: '冷面剑修' })
+    await value(ctx, 'lore_register', { category: 'world', title: '青鸾', content: '护山灵兽' })
+    await value(ctx, 'vow_plant', { title: 'Blade', promise: '剑会回来', at: '1200.01.01' })
+    await value(ctx, 'manuscript_write', { number: 1, title: 'The gate', content: 'Aya 推开了山门。' })
+    const context = await value(ctx, 'chapter_context', { chapter: 2 })
+    expect((context.world as { subjects: unknown[] }).subjects).toHaveLength(1)
+    expect((context.lore as unknown[]).length).toBeGreaterThan(0)
+    expect((context.pendingVows as unknown[]).length).toBe(1)
+    expect((context.previousManuscript as { content: string }).content).toContain('山门')
+    expect((context.chapter as { number: number }).number).toBe(2)
+  })
+
+  it('reports which known subjects a draft mentions in manuscript_check', async () => {
+    const ctx = await setup()
+    await value(ctx, 'world_subject', { kind: 'character', name: 'Aya' })
+    await value(ctx, 'world_subject', { kind: 'character', name: '希罗' })
+    await value(ctx, 'manuscript_write', { number: 1, title: 'T', content: 'Aya 与希罗并肩而行。' })
+    const check = await value(ctx, 'manuscript_check', { chapter: 1 })
+    expect([...(check.mentionedNames as unknown[])].sort()).toEqual(['Aya', '希罗'])
+    expect(check.draft).toContain('并肩而行')
+  })
+
+  it('scans a draft for vow signals and subject mentions', async () => {
+    const ctx = await setup()
+    await value(ctx, 'world_subject', { kind: 'character', name: 'Aya' })
+    await value(ctx, 'vow_plant', { title: 'Blade', promise: '剑会回来', at: '1200.01.01', payoffTarget: '第2章' })
+    await value(ctx, 'manuscript_write', { number: 2, title: 'T', content: 'Aya 立誓：总有一天要找回那把剑。' })
+    const scan = await value(ctx, 'manuscript_scan', { chapter: 2 })
+    expect((scan.newVowCandidates as unknown[]).length).toBeGreaterThan(0)
+    expect((scan.mentionedNames as unknown[])).toContain('Aya')
+    expect((scan.vowsToAdvance as unknown[]).length).toBeGreaterThan(0)
+  })
+
+  it('returns the full workflow with steps for a chapter', async () => {
+    const ctx = await setup()
+    await value(ctx, 'world_subject', { kind: 'location', name: '山门' })
+    const brief = await value(ctx, 'chapter_workflow', { chapter: 1 })
+    expect((brief.steps as unknown[]).length).toBeGreaterThanOrEqual(5)
+    expect((brief.world as { subjects: unknown[] }).subjects).toHaveLength(1)
   })
 })

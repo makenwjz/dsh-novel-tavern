@@ -3189,6 +3189,18 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
         }
       },
 
+      async setWorldBookEntryEnabled(request) {
+        const tavern = tavernStore()
+        if ('error' in tavern) return err(request, tavern.error)
+        try {
+          tavern.setWorldBookEntryEnabled(request.payload.id, request.payload.entryName, request.payload.enabled)
+          return ok(request, { updated: true as const })
+        } catch (error: unknown) {
+          const message = error instanceof Error ? error.message : String(error)
+          return err(request, { code: 'internal', message, details: {} })
+        }
+      },
+
       async listCharacters(request) {
         const tavern = tavernStore()
         if ('error' in tavern) return err(request, tavern.error)
@@ -3307,6 +3319,33 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
           })
         }
         return ok(request, { binding: tavern.advanceStage(session.id) })
+      },
+
+      async setGreeting(request) {
+        const tavern = tavernStore()
+        if ('error' in tavern) return err(request, tavern.error)
+        try {
+          tavern.setGreeting(request.payload.sessionId, request.payload.greeting)
+          return ok(request, { appended: true as const })
+        } catch (error: unknown) {
+          const message = error instanceof Error ? error.message : String(error)
+          if (/already started|already written|not attached|must not be empty/.test(message)) {
+            return err(request, { code: 'bad-request', message, details: { issues: [] } })
+          }
+          return err(request, { code: 'internal', message, details: {} })
+        }
+      },
+
+      async setMvu(request) {
+        const tavern = tavernStore()
+        if ('error' in tavern) return err(request, tavern.error)
+        try {
+          const binding = tavern.setMvuVariables(request.payload.sessionId, request.payload.variables)
+          return ok(request, { binding })
+        } catch (error: unknown) {
+          const message = error instanceof Error ? error.message : String(error)
+          return err(request, { code: 'internal', message, details: {} })
+        }
       },
 
       async scoreCharacter(request) {

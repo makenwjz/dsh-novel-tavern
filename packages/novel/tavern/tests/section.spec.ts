@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
-import { foldBinding, recentText, renderTavernSection } from '../src/section.ts'
+import { applyPromptScripts, foldBinding, hasOpeningMessage, recentText, renderTavernSection } from '../src/section.ts'
 import type { ActivatedLore, CharacterId, CharacterProfile, TavernBindingData, WorldBookId } from '../src/types.ts'
 
 /** One message event fixture. */
@@ -141,6 +141,57 @@ describe('renderTavernSection', () => {
     expect(text).toContain('- 额外设定: 不得提及现实世界')
     expect(text).toContain('- 行为准则: 保持冷淡')
     expect(text).toContain('开场白开始：\n*拔出剑* Aya在等你，用户。')
+  })
+
+  it('detects an opening message before the first user message', () => {
+    expect(hasOpeningMessage([message('开场', 'assistant')])).toBe(true)
+    expect(hasOpeningMessage([message('开场', 'assistant'), message('你好')])).toBe(true)
+    expect(hasOpeningMessage([message('你好')])).toBe(false)
+    expect(hasOpeningMessage([message('你好'), message('回复', 'assistant')])).toBe(false)
+    expect(hasOpeningMessage([])).toBe(false)
+  })
+
+  it('skips the forced opener when the opening message is already in the log', () => {
+    const text = renderTavernSection({
+      binding: { mode: 'tavern', worldbookIds: [], characterId: 'c-1' as CharacterId },
+      characters: [PROFILE],
+      activated: [],
+      openingPresent: true,
+    })
+    expect(text).toContain('## 角色扮演设定')
+    expect(text).toContain('你现在扮演 Aya。')
+    expect(text).not.toContain('开场白开始')
+  })
+
+  it('injects session MVU variables over the card initial variables', () => {
+    const card: CharacterProfile = { ...PROFILE, mvuVariables: { playthrough: '1', chapter: '1' } }
+    const text = renderTavernSection({
+      binding: { mode: 'tavern', worldbookIds: [], characterId: 'c-1' as CharacterId },
+      characters: [card],
+      activated: [],
+      mvuVariables: { playthrough: '3' },
+    })
+    expect(text).toContain('## 角色状态')
+    expect(text).toContain('- playthrough: 3')
+    expect(text).toContain('- chapter: 1')
+  })
+
+  it('applies prompt-side regex scripts (bare and slashed) to the rendered text', () => {
+    const hidden = applyPromptScripts('## 角色扮演设定\n<update>变量机制</update>\n正文', [
+      { findRegex: '<update>.*?</update>', replaceString: '', enabled: true, promptOnly: true },
+    ])
+    expect(hidden).not.toContain('<update>')
+    expect(hidden).toContain('正文')
+    const slashed = applyPromptScripts('【封面】标题', [
+      { findRegex: '/【封面】/', replaceString: '封面已隐藏', enabled: true, promptOnly: true },
+    ])
+    expect(slashed).toBe('封面已隐藏标题')
+    const skipped = applyPromptScripts('abc', [
+      { findRegex: 'a', replaceString: 'X', enabled: false, promptOnly: true },
+      { findRegex: 'a', replaceString: 'X', enabled: true, promptOnly: false },
+      { findRegex: '[', replaceString: 'X', enabled: true, promptOnly: true },
+    ])
+    expect(skipped).toBe('abc')
   })
 
   it('omits empty character fields and the opener when absent', () => {

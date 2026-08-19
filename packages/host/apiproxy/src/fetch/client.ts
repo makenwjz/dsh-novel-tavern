@@ -56,11 +56,14 @@ import {
 import {
   tavernAdvanceStageValueSchema,
   tavernBindingValueSchema,
+  tavernSetGreetingValueSchema,
+  tavernSetMvuValueSchema,
   tavernScoreCharacterValueSchema,
   tavernProjectTreeValueSchema,
   tavernCharacterImageValueSchema,
   tavernDeleteCharacterValueSchema,
   tavernDeleteWorldBookValueSchema,
+  tavernSetWorldBookEntryEnabledValueSchema,
   tavernImportCharacterValueSchema,
   tavernImportWorldBookValueSchema,
   tavernLeanValueSchema,
@@ -166,6 +169,7 @@ export interface IApiClient {
     listWorldBooks(payload: RequestPayload<'tavern.listWorldBooks'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'tavern.listWorldBooks'>>>
     importWorldBook(payload: RequestPayload<'tavern.importWorldBook'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'tavern.importWorldBook'>>>
     deleteWorldBook(payload: RequestPayload<'tavern.deleteWorldBook'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'tavern.deleteWorldBook'>>>
+    setWorldBookEntryEnabled(payload: RequestPayload<'tavern.setWorldBookEntryEnabled'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'tavern.setWorldBookEntryEnabled'>>>
     listCharacters(payload: RequestPayload<'tavern.listCharacters'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'tavern.listCharacters'>>>
     importCharacter(payload: RequestPayload<'tavern.importCharacter'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'tavern.importCharacter'>>>
     deleteCharacter(payload: RequestPayload<'tavern.deleteCharacter'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'tavern.deleteCharacter'>>>
@@ -176,6 +180,8 @@ export interface IApiClient {
     lean(payload: RequestPayload<'tavern.lean'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'tavern.lean'>>>
     setLean(payload: RequestPayload<'tavern.setLean'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'tavern.setLean'>>>
     advanceStage(payload: RequestPayload<'tavern.advanceStage'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'tavern.advanceStage'>>>
+    setGreeting(payload: RequestPayload<'tavern.setGreeting'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'tavern.setGreeting'>>>
+    setMvu(payload: RequestPayload<'tavern.setMvu'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'tavern.setMvu'>>>
     scoreCharacter(payload: RequestPayload<'tavern.scoreCharacter'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'tavern.scoreCharacter'>>>
     projectTree(payload: RequestPayload<'tavern.projectTree'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'tavern.projectTree'>>>
     characterImage(payload: RequestPayload<'tavern.characterImage'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'tavern.characterImage'>>>
@@ -250,6 +256,7 @@ const UNARY_VALUE_SCHEMAS: { [K in keyof RpcMethodMap]: z.ZodType<Wire<ResponseV
   'tavern.listWorldBooks': tavernListWorldBooksValueSchema,
   'tavern.importWorldBook': tavernImportWorldBookValueSchema,
   'tavern.deleteWorldBook': tavernDeleteWorldBookValueSchema,
+  'tavern.setWorldBookEntryEnabled': tavernSetWorldBookEntryEnabledValueSchema,
   'tavern.listCharacters': tavernListCharactersValueSchema,
   'tavern.importCharacter': tavernImportCharacterValueSchema,
   'tavern.deleteCharacter': tavernDeleteCharacterValueSchema,
@@ -260,6 +267,8 @@ const UNARY_VALUE_SCHEMAS: { [K in keyof RpcMethodMap]: z.ZodType<Wire<ResponseV
   'tavern.lean': tavernLeanValueSchema,
   'tavern.setLean': tavernSetLeanValueSchema,
   'tavern.advanceStage': tavernAdvanceStageValueSchema,
+  'tavern.setGreeting': tavernSetGreetingValueSchema,
+  'tavern.setMvu': tavernSetMvuValueSchema,
   'tavern.scoreCharacter': tavernScoreCharacterValueSchema,
   'tavern.projectTree': tavernProjectTreeValueSchema,
   'tavern.characterImage': tavernCharacterImageValueSchema,
@@ -536,6 +545,7 @@ export abstract class AbstractApiClient implements IApiClient {
     listWorldBooks: (payload, signal) => this.callUnary('tavern.listWorldBooks', payload, signal),
     importWorldBook: (payload, signal) => this.callUnary('tavern.importWorldBook', payload, signal),
     deleteWorldBook: (payload, signal) => this.callUnary('tavern.deleteWorldBook', payload, signal),
+    setWorldBookEntryEnabled: (payload, signal) => this.callUnary('tavern.setWorldBookEntryEnabled', payload, signal),
     listCharacters: (payload, signal) => this.callUnary('tavern.listCharacters', payload, signal),
     importCharacter: (payload, signal) => this.callUnary('tavern.importCharacter', payload, signal),
     deleteCharacter: (payload, signal) => this.callUnary('tavern.deleteCharacter', payload, signal),
@@ -546,6 +556,8 @@ export abstract class AbstractApiClient implements IApiClient {
     lean: (payload, signal) => this.callUnary('tavern.lean', payload, signal),
     setLean: (payload, signal) => this.callUnary('tavern.setLean', payload, signal),
     advanceStage: (payload, signal) => this.callUnary('tavern.advanceStage', payload, signal),
+    setGreeting: (payload, signal) => this.callUnary('tavern.setGreeting', payload, signal),
+    setMvu: (payload, signal) => this.callUnary('tavern.setMvu', payload, signal),
     scoreCharacter: (payload, signal) => this.callUnary('tavern.scoreCharacter', payload, signal),
     projectTree: (payload, signal) => this.callUnary('tavern.projectTree', payload, signal),
     characterImage: (payload, signal) => this.callUnary('tavern.characterImage', payload, signal),

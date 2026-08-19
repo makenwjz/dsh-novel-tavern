@@ -29,6 +29,7 @@ const bindingWireSchema = z.object({
   characterIds: z.array(z.string()).optional(),
   stage: z.number().int().min(0).optional(),
   disabledEntryNames: z.array(z.string()).optional(),
+  mvuVariables: z.record(z.string(), z.string()).optional(),
 })
 
 /** tavern.listWorldBooks request payload (none). */
@@ -58,6 +59,18 @@ export const tavernDeleteWorldBookRequestSchema = z.object({
 export const tavernDeleteWorldBookValueSchema = z.object({
   deleted: z.literal(true),
 }) as unknown as z.ZodType<Wire<ResponseValue<'tavern.deleteWorldBook'>>>
+
+/** tavern.setWorldBookEntryEnabled request payload. */
+export const tavernSetWorldBookEntryEnabledRequestSchema = z.object({
+  id: z.string(),
+  entryName: z.string(),
+  enabled: z.boolean(),
+}) as unknown as z.ZodType<Wire<RequestPayload<'tavern.setWorldBookEntryEnabled'>>>
+
+/** tavern.setWorldBookEntryEnabled response value. */
+export const tavernSetWorldBookEntryEnabledValueSchema = z.object({
+  updated: z.literal(true),
+}) as unknown as z.ZodType<Wire<ResponseValue<'tavern.setWorldBookEntryEnabled'>>>
 
 /** tavern.listCharacters request payload (none). */
 export const tavernListCharactersRequestSchema = z.object({}) as unknown as z.ZodType<Wire<RequestPayload<'tavern.listCharacters'>>>
@@ -159,6 +172,28 @@ export const tavernAdvanceStageRequestSchema = z.object({
 export const tavernAdvanceStageValueSchema = z.object({
   binding: bindingWireSchema,
 }) as unknown as z.ZodType<Wire<ResponseValue<'tavern.advanceStage'>>>
+
+/** tavern.setGreeting request payload. */
+export const tavernSetGreetingRequestSchema = z.object({
+  sessionId: z.string(),
+  greeting: z.string(),
+}) as unknown as z.ZodType<Wire<RequestPayload<'tavern.setGreeting'>>>
+
+/** tavern.setGreeting response value. */
+export const tavernSetGreetingValueSchema = z.object({
+  appended: z.literal(true),
+}) as unknown as z.ZodType<Wire<ResponseValue<'tavern.setGreeting'>>>
+
+/** tavern.setMvu request payload. */
+export const tavernSetMvuRequestSchema = z.object({
+  sessionId: z.string(),
+  variables: z.record(z.string(), z.string()),
+}) as unknown as z.ZodType<Wire<RequestPayload<'tavern.setMvu'>>>
+
+/** tavern.setMvu response value. */
+export const tavernSetMvuValueSchema = z.object({
+  binding: bindingWireSchema,
+}) as unknown as z.ZodType<Wire<ResponseValue<'tavern.setMvu'>>>
 
 /** tavern.scoreCharacter request payload. */
 export const tavernScoreCharacterRequestSchema = z.object({

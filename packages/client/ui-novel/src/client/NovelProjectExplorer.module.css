@@ -281,6 +281,28 @@
   overflow-wrap: anywhere;
 }
 
+.entryToggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.entryToggle input[type='checkbox'] {
+  accent-color: var(--gi-gold);
+  cursor: pointer;
+}
+
+.entryToggleOn {
+  color: #9fd08a;
+}
+
+.entryToggleOff {
+  color: var(--gi-cream-3);
+}
+
 .muted {
   color: var(--gi-cream-3);
   font-size: 12px;

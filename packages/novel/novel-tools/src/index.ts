@@ -35,6 +35,7 @@ import type {
 } from '@deepseek-ai/dsh-novel/src/types.ts'
 import { lintManuscript } from './lint.ts'
 import type { LintHit } from './lint.ts'
+import { registerWritingTools } from './writing.ts'
 
 export const name = 'novel-tools'
 export const inject = ['tools']
@@ -1267,4 +1268,6 @@ export function apply(ctx: Context, config: Config): void {
       presentCall: args => ({ card: 'generic', title: 'Lint manuscript', kind: 'other', rawInput: args }),
     }))
   }
+
+  registerWritingTools(ctx)
 }

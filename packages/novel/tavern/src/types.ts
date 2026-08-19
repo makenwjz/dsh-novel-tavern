@@ -167,6 +167,10 @@ export interface TavernBindingData {
    *  Cards drive this through their frontend (e.g. playthrough/chapter toggles)
    *  to switch which lore context stays active. */
   readonly disabledEntryNames?: string[]
+  /** The session's MVU variable state (SillyTavern card variables), injected
+   *  into the prompt as `## 角色状态`. Cards update it through the bridge
+   *  (`replaceMvuData`) and through the model's `<json_patch>` blocks. */
+  readonly mvuVariables?: Readonly<Record<string, string>>
 }
 
 /** One dangling binding reference found by the invariant check. */

@@ -50,6 +50,8 @@ type ChatSummary = {
   readonly characterIds: CharacterId[]
   /** Worldbook entry names this session keeps disabled (driven by the card frontend). */
   readonly disabledEntryNames: string[]
+  /** The session's MVU variable state (card variables, injected into the prompt). */
+  readonly mvuVariables: Record<string, string>
 }
 
 /** One card the chat can start a conversation with. */
@@ -99,9 +101,25 @@ function cardBridgeShim(options: { worldbookName: string; entries: readonly { na
   };
   window.showToast = function (text, kind) { post('toast', { text: String(text), kind: kind || 'info' }); };
   // Safe no-op stubs for the rest of the ST surface the card may touch.
-  window.Mvu = undefined;
-  window.getMvuData = function () { return {}; };
-  window.replaceMvuData = function () { post('toast', { text: 'MVU variables are not wired yet', kind: 'warning' }); };
+  // The MVU bridge: the card's variable system reads/writes through Mvu.
+  var mvuState = { chapter_manager: {}, world_info: {}, contact: {} };
+  window.Mvu = {
+    getMvuData: function () { return { stat_data: mvuState }; },
+    replaceMvuData: function (data) {
+      var src = data && data.stat_data ? data.stat_data : data;
+      var flat = {};
+      (function walk(node, prefix) {
+        if (node === null || node === undefined) return;
+        if (typeof node !== 'object') { if (prefix) flat[prefix] = String(node); return; }
+        if (Array.isArray(node)) { if (prefix) flat[prefix] = JSON.stringify(node); return; }
+        for (var k in node) walk(node[k], prefix ? prefix + '.' + k : k);
+      })(src, '');
+      mvuState = src || {};
+      post('mvu', { variables: flat });
+    }
+  };
+  window.getMvuData = function () { return window.Mvu.getMvuData(); };
+  window.replaceMvuData = function (data) { window.Mvu.replaceMvuData(data); };
   window.getChatVariables = function () { return {}; };
   window.setChatVariables = function () {};
   window.replaceWorldbook = function () {};
@@ -131,6 +149,39 @@ function cardBridgeShim(options: { worldbookName: string; entries: readonly { na
 /** Whether a message would render as the card's HTML (drives the wide bubble). */
 export function isRichMessage(text: string, scripts: readonly CardScript[]): boolean {
   return looksLikeHtml(applyRegexScripts(text, scripts))
+}
+
+/** Apply one JSON-patch array (the card's `<json_patch>` block) to a flat MVU
+ *  variable map. Nested paths collapse to their last segment
+ *  (`/world_info/time/current_time` → `current_time`), matching how the prompt
+ *  displays the card variables. */
+function applyMvuPatch(vars: Record<string, string>, patch: unknown): Record<string, string> {
+  if (!Array.isArray(patch)) return vars
+  const next = { ...vars }
+  for (const op of patch) {
+    if (typeof op !== 'object' || op === null) continue
+    const row = op as { op?: unknown; path?: unknown; value?: unknown }
+    if (row.op !== 'replace' && row.op !== 'add') continue
+    if (typeof row.path !== 'string') continue
+    const key = row.path.split('/').filter(Boolean).pop()
+    if (key === undefined || key.length === 0) continue
+    next[key] = typeof row.value === 'string' ? row.value : JSON.stringify(row.value ?? '')
+  }
+  return next
+}
+
+/** Collect every `<json_patch>` block from a message and apply it. */
+function applyMvuPatchesFromText(text: string, vars: Record<string, string>): Record<string, string> {
+  let out = vars
+  const regex = /<json_patch>([\s\S]*?)<\/json_patch>/g
+  let match: RegExpExecArray | null
+  while ((match = regex.exec(text)) !== null) {
+    if (match[1] === undefined) continue
+    try {
+      out = applyMvuPatch(out, JSON.parse(match[1]))
+    } catch { /* malformed patch: skip */ }
+  }
+  return out
 }
 
 /** One auto-sizing, user-resizable sandboxed frame for a card-rendered message.
@@ -371,7 +422,38 @@ export function TavernChat({ api, t, useSessions, onNeedLibrary, focusSession }:
   const [notice, setNotice] = useState('')
   // Per-session chosen greeting index into the card's openings.
   const [greetingIndex, setGreetingIndex] = useState<Record<string, number>>({})
+  // Whether the chosen opening has been written into the session log.
+  const [openingWritten, setOpeningWritten] = useState(false)
+  // MVU variable baseline for the active chat (idempotent patch application).
+  const mvuBaselineRef = useRef<Record<string, string>>({})
   const endRef = useRef<HTMLDivElement | null>(null)
+
+  /** Opening-write state is per session: reset when switching chats. */
+  useEffect(() => {
+    setOpeningWritten(false)
+  }, [active])
+
+  /** Re-baseline the MVU variables whenever the active chat's data changes. */
+  useEffect(() => {
+    const summary = chats.find(chat => chat.sessionId === active)
+    mvuBaselineRef.current = summary?.mvuVariables ?? {}
+  }, [active, chats])
+
+  /** Replay the model's `<json_patch>` blocks from the loaded rows onto the
+   *  session's MVU variables and push the result when anything changed. */
+  const syncMvuFromRows = (nextRows: ChatRow[]): void => {
+    const baseline = mvuBaselineRef.current
+    let vars = baseline
+    for (const row of nextRows) {
+      if (row.role === 'assistant') vars = applyMvuPatchesFromText(row.text, vars)
+    }
+    if (JSON.stringify(vars) === JSON.stringify(baseline)) return
+    mvuBaselineRef.current = vars
+    setChats(previous => previous.map(chat => chat.sessionId === active ? { ...chat, mvuVariables: vars } : chat))
+    void api.tavern.setMvu({ sessionId: active as never, variables: vars }).then(result => {
+      if (!result.result.ok) setError(t('chatError', { reason: result.result.error.message }))
+    }, () => {})
+  }
 
   /** Load the tavern-bound session list and the character rows. */
   useEffect(() => {
@@ -421,6 +503,7 @@ export function TavernChat({ api, t, useSessions, onNeedLibrary, focusSession }:
           worldbookIds: [...b.worldbookIds],
           characterIds: characterIds as CharacterId[],
           disabledEntryNames: [...(b.disabledEntryNames ?? [])],
+          mvuVariables: { ...(b.mvuVariables ?? {}) },
         })
       }
       setChats(summaries)
@@ -440,7 +523,9 @@ export function TavernChat({ api, t, useSessions, onNeedLibrary, focusSession }:
     void api.sessions.history({ sessionId: active as never, maxMessages: 80 }).then((result) => {
       const r = result.result
       if (!current || !r.ok) return
-      setRows(toChatRows(r.value.events))
+      const next = toChatRows(r.value.events)
+      setRows(next)
+      syncMvuFromRows(next)
     }, () => { /* the poll path surfaces errors */ })
     const summary = chats.find(chat => chat.sessionId === active)
     if (summary?.characterId !== null && summary?.characterId !== undefined && avatars[summary.characterId] === undefined) {
@@ -515,6 +600,18 @@ export function TavernChat({ api, t, useSessions, onNeedLibrary, focusSession }:
         }, () => {})
         return
       }
+      if (data.type === 'mvu') {
+        const payload = data.payload as { variables?: unknown } | null
+        const variables = payload?.variables
+        if (typeof variables !== 'object' || variables === null) return
+        const flat = variables as Record<string, string>
+        mvuBaselineRef.current = flat
+        setChats(previous => previous.map(chat => chat.sessionId === active ? { ...chat, mvuVariables: flat } : chat))
+        void api.tavern.setMvu({ sessionId: active as never, variables: flat }).then((result) => {
+          if (!result.result.ok) setError(t('chatError', { reason: result.result.error.message }))
+        }, () => {})
+        return
+      }
     }
     window.addEventListener('message', onMessage)
     return () => { window.removeEventListener('message', onMessage) }
@@ -586,6 +683,7 @@ export function TavernChat({ api, t, useSessions, onNeedLibrary, focusSession }:
           worldbookIds: [...boundResult.value.binding.worldbookIds],
           characterIds: characterIds as CharacterId[],
           disabledEntryNames: [],
+          mvuVariables: {},
         },
       ])
       setActive(sessionId)
@@ -615,7 +713,9 @@ export function TavernChat({ api, t, useSessions, onNeedLibrary, focusSession }:
     })
   }
 
-  /** Send one message and poll history until the reply settles. */
+  /** Send one message; on a fresh chat the chosen greeting is first written
+   *  into the session log so the model continues from it (SillyTavern
+   *  behavior), then the message is queued and the reply polled. */
   const send = (event: FormEvent): void => {
     event.preventDefault()
     const text = input.trim()
@@ -623,29 +723,35 @@ export function TavernChat({ api, t, useSessions, onNeedLibrary, focusSession }:
     setInput('')
     setSending(true)
     setError('')
-    void api.sessions.prompt({
-      sessionId: active as never,
-      mode: 'queue',
-      content: [{ type: 'text', text }],
-    }).then((result) => {
-      if (!result.result.ok) {
-        setSending(false)
-        setError(t('chatError', { reason: result.result.error.message }))
-        return
-      }
-      // Poll history until a new assistant message lands after this send.
-      const deadline = Date.now() + 90000
-      let stable = 0
-      const poll = (): void => {
-        void api.sessions.history({ sessionId: active as never, maxMessages: 80 }).then((historyResult) => {
-          if (!historyResult.result.ok) {
-            setSending(false)
-            return
-          }
+    const summary = chats.find(chat => chat.sessionId === active)
+    const greeting = summary !== undefined && summary.greetings.length > 0
+      ? summary.greetings[Math.min(greetingIndex[active] ?? 0, summary.greetings.length - 1)] ?? ''
+      : ''
+    const queueMessage = (): void => {
+      void api.sessions.prompt({
+        sessionId: active as never,
+        mode: 'queue',
+        content: [{ type: 'text', text }],
+      }).then((result) => {
+        if (!result.result.ok) {
+          setSending(false)
+          setError(t('chatError', { reason: result.result.error.message }))
+          return
+        }
+        // Poll history until a new assistant message lands after this send.
+        const deadline = Date.now() + 90000
+        let stable = 0
+        const poll = (): void => {
+          void api.sessions.history({ sessionId: active as never, maxMessages: 80 }).then((historyResult) => {
+            if (!historyResult.result.ok) {
+              setSending(false)
+              return
+            }
           const next = toChatRows(historyResult.result.value.events)
           const lastUser = [...next].reverse().find(row => row.role === 'user')
           const hasReply = lastUser !== undefined && next.some(row => row.role === 'assistant' && row.seq > lastUser.seq)
           setRows(next)
+          syncMvuFromRows(next)
           if (hasReply) {
             stable += 1
             if (stable >= 2 || Date.now() > deadline) {
@@ -664,6 +770,25 @@ export function TavernChat({ api, t, useSessions, onNeedLibrary, focusSession }:
       setSending(false)
       setError(t('chatError', { reason: reason instanceof Error ? reason.message : String(reason) }))
     })
+    }
+    if (greeting.length > 0 && !openingWritten) {
+      // Write the chosen opening into the session log first, so the model
+      // continues from it instead of being told to re-open the scene.
+      void api.tavern.setGreeting({ sessionId: active as never, greeting }).then((result) => {
+        if (!result.result.ok) {
+          setSending(false)
+          setError(t('chatError', { reason: result.result.error.message }))
+          return
+        }
+        setOpeningWritten(true)
+        queueMessage()
+      }, (reason: unknown) => {
+        setSending(false)
+        setError(t('chatError', { reason: reason instanceof Error ? reason.message : String(reason) }))
+      })
+    } else {
+      queueMessage()
+    }
   }
 
   const activeSummary = chats.find(chat => chat.sessionId === active)
@@ -675,6 +800,15 @@ export function TavernChat({ api, t, useSessions, onNeedLibrary, focusSession }:
   const greeting = activeSummary !== undefined && activeSummary.greetings.length > 0
     ? activeSummary.greetings[Math.min(greetingIndexForActive, activeSummary.greetings.length - 1)] ?? ''
     : ''
+  // Whether the session log already carries the opening (written by a previous
+  // send or on reload) — the local preview bubble hides to avoid duplication.
+  let openingInHistory = false
+  let sawUserRow = false
+  for (const row of rows) {
+    if (row.role === 'user') sawUserRow = true
+    else if (row.role === 'assistant' && !sawUserRow) { openingInHistory = true; break }
+  }
+  const showLocalGreeting = greeting.length > 0 && !openingWritten && !openingInHistory
 
   return (
     <div className={css.chat}>
@@ -749,7 +883,7 @@ export function TavernChat({ api, t, useSessions, onNeedLibrary, focusSession }:
               </button>
             </header>
             <div className={css.messages} aria-live="polite">
-              {greeting.length > 0 ? (
+              {showLocalGreeting ? (
                 <div className={css.bubbleRow}>
                   {avatarB64 === undefined
                     ? <span className={css.avatarFallback}>{activeSummary.characterName.slice(0, 1) || '🍺'}</span>
@@ -768,7 +902,7 @@ export function TavernChat({ api, t, useSessions, onNeedLibrary, focusSession }:
                   </div>
                 </div>
               ) : null}
-              {rows.length === 0 && greeting.length === 0 ? (
+              {rows.length === 0 && !showLocalGreeting ? (
                 <p className={css.noMessages}>{t('chatEmpty')}</p>
               ) : rows.map((row, index) => {
                 const previous = rows[index - 1]

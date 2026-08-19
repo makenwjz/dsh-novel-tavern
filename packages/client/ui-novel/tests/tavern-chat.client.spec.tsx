@@ -36,6 +36,7 @@ function chatApi() {
       startRoleplay: vi.fn(),
       stopRoleplay: vi.fn(),
       setBinding: vi.fn(),
+      setGreeting: vi.fn(),
       importCharacter: vi.fn(),
       importWorldBook: vi.fn(),
       deleteCharacter: vi.fn(),
@@ -75,6 +76,7 @@ function chatApi() {
   api.sessions.list.mockResolvedValue(ok({ items: [] }))
   api.sessions.history.mockResolvedValue(ok({ events: [] }))
   api.sessions.prompt.mockResolvedValue(ok({ accepted: true }))
+  api.tavern.setGreeting.mockResolvedValue(ok({ appended: true }))
   api.workspace.list.mockResolvedValue(ok({ items: [], archivedSessionIds: [] }))
   api.workspace.archiveSession.mockResolvedValue(ok({ archivedSessionIds: [] }))
   return api
@@ -172,10 +174,12 @@ describe('TavernChat', () => {
     fireEvent.change(input, { target: { value: '在吗' } })
     fireEvent.submit(input.closest('form')!)
 
-    expect(api.sessions.prompt).toHaveBeenCalledWith({
-      sessionId: 'session-new',
-      mode: 'queue',
-      content: [{ type: 'text', text: '在吗' }],
+    await waitFor(() => {
+      expect(api.sessions.prompt).toHaveBeenCalledWith({
+        sessionId: 'session-new',
+        mode: 'queue',
+        content: [{ type: 'text', text: '在吗' }],
+      })
     })
 
     // The poll loop lands the reply within a few seconds.
@@ -297,5 +301,42 @@ describe('TavernChat', () => {
     fireEvent.change(screen.getByLabelText('Pick an opening'), { target: { value: '1' } })
     await waitFor(() => { expect(document.querySelector('iframe[title="阿雅"]')).toBeNull() })
     expect(screen.getByText('备用开场')).toBeTruthy()
+  })
+
+  it('writes the chosen opening into the session log before the first message', async () => {
+    const api = chatApi()
+    api.tavern.projectTree.mockResolvedValue(ok({
+      worldbooks: [],
+      characters: [{
+        id: 'character-1', name: '阿雅', format: 'png', hasAvatar: true, extensions: {}, greetings: ['开场白一', '开场白二'],
+      }],
+    }))
+    api.tavern.binding.mockResolvedValue(ok({
+      binding: { mode: 'tavern', worldbookIds: [], characterId: null, characterIds: ['character-1'] },
+    }))
+    api.sessions.list.mockResolvedValue(ok({ items: [
+      { sessionId: 'session-1', updatedAt: 1, running: false, blank: false },
+    ] }))
+    renderChat(api)
+
+    // Switch to the second opening, then send the first message.
+    const picker = await screen.findByLabelText('Pick an opening')
+    fireEvent.change(picker, { target: { value: '1' } })
+    const input = await screen.findByLabelText('Type a message…')
+    fireEvent.change(input, { target: { value: '开始吧' } })
+    fireEvent.submit(input.closest('form')!)
+
+    await waitFor(() => {
+      expect(api.tavern.setGreeting).toHaveBeenCalledWith({ sessionId: 'session-1', greeting: '开场白二' })
+    })
+    // The message is queued only after the opening lands.
+    await waitFor(() => {
+      expect(api.sessions.prompt).toHaveBeenCalledWith({
+        sessionId: 'session-1', mode: 'queue', content: [{ type: 'text', text: '开始吧' }],
+      })
+    })
+    // The local preview bubble disappears once the opening is written.
+    await waitFor(() => { expect(api.tavern.setGreeting).toHaveBeenCalled() })
+    expect(screen.queryByText('开场白二')).toBeNull()
   })
 })

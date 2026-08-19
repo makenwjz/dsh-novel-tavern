@@ -102,7 +102,7 @@ dsh plugin --profile web add @deepseek-ai/dsh-client-ui-novel
 
 ## 五、版本与更新
 
-- 当前：**v0.1**（功能可用，UI 和兼容性还在打磨）
+- 当前：**v0.2**（开场白写入历史、MVU 变量、promptOnly 脚本、世界书条目编辑、小说写作工作流均已上线）
 - 会持续更新：开场白写进历史、MVU 变量、更多角色卡兼容、npm 一键安装……
 - 求 star 求反馈：有问题/有「我的卡渲染不出来」的案例，直接提 issue
 

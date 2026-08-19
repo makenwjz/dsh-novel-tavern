@@ -156,6 +156,24 @@ describe('TavernService store', () => {
     expect(tavern.listWorldBooks().map(row => row.id)).not.toContain(unbound.id)
   })
 
+  it('toggles one worldbook entry enabled flag in the stored file', async () => {
+    const { tavern } = await mount()
+    const named = {
+      name: '带名世界书',
+      entries: [
+        { name: '第一章·总览', keys: ['青鸾'], content: '青鸾是护山灵兽。', enabled: true },
+        { name: '第一章·日常', keys: ['山门'], content: '山门禁地。', enabled: true },
+      ],
+    }
+    const book = tavern.importWorldBook(JSON.stringify(named))
+    expect(tavern.worldBook(book.id).entries[0]?.enabled).toBe(true)
+    expect(tavern.setWorldBookEntryEnabled(book.id, '第一章·总览', false)).toBe(true)
+    expect(tavern.worldBook(book.id).entries[0]?.enabled).toBe(false)
+    expect(tavern.worldBook(book.id).entries[1]?.enabled).toBe(true)
+    expect(() => tavern.setWorldBookEntryEnabled(book.id, '不存在', true)).toThrow(/no entry named/)
+    expect(() => tavern.setWorldBookEntryEnabled('worldbook-missing' as WorldBookId, 'x', true)).toThrow(/not found/)
+  })
+
   it('resolves character profiles by json or png extension', async () => {
     const { tavern } = await mount()
     const json = tavern.importCharacter('a.json', new TextEncoder().encode(JSON.stringify(CHARACTER)))
@@ -192,6 +210,43 @@ describe('TavernService store', () => {
     expect(total).toBe(500)
     // Config validation rejects an absurdly small budget.
     await expect(ctx.plugin(TavernService, { root: mkdtempSync(join(tmpdir(), 'dsh-tavern-bad-')), activationCharBudget: 10 } as never)).rejects.toThrow()
+  })
+
+  it('writes the opening message into a fresh session and refuses after the chat starts', async () => {
+    const { ctx, tavern } = await mount()
+    const session = bind(ctx, { mode: 'tavern', worldbookIds: [], characterId: null })
+    expect(tavern.setGreeting(session.id, '月光下，她推开了门。')).toBe(true)
+    const opening = session.events.find(event => event.type === 'assistant/message')
+    expect(opening).toBeDefined()
+    const message = (opening as { data: { message: { content: Array<{ text?: string }> } } }).data.message
+    expect(message.content[0]?.text).toBe('月光下，她推开了门。')
+    // A second write is refused (the opening already exists).
+    expect(() => tavern.setGreeting(session.id, '另一版开场')).toThrow(/already written/)
+    // Once the user speaks, the opening can no longer be written.
+    const started = bind(ctx, { mode: 'tavern', worldbookIds: [], characterId: null })
+    started.append('user/message', {
+      id: 'm-1' as never,
+      role: 'user',
+      content: [{ type: 'text', text: '你好' }],
+      source: { kind: 'user' },
+    }, { surfaceOp: 'append' })
+    expect(() => tavern.setGreeting(started.id, '迟到开场')).toThrow(/already started/)
+    // Blank greetings and unattached sessions fail loud.
+    expect(() => tavern.setGreeting(started.id, '  ')).toThrow(/must not be empty/)
+    expect(() => tavern.setGreeting('missing-session', '开场')).toThrow(/not attached/)
+  })
+
+  it('stores and folds per-session MVU variables', async () => {
+    const { ctx, tavern } = await mount()
+    const session = bind(ctx, { mode: 'tavern', worldbookIds: [], characterId: null })
+    const binding = tavern.setMvuVariables(session.id, { game_mode: '1', playthrough: '2', scene_name: '01-噩梦与觉醒' })
+    expect(binding.mvuVariables).toEqual({ game_mode: '1', playthrough: '2', scene_name: '01-噩梦与觉醒' })
+    const folded = tavern.bindingOf(session.id)
+    expect(folded?.mvuVariables).toEqual({ game_mode: '1', playthrough: '2', scene_name: '01-噩梦与觉醒' })
+    // Replacing replaces the map wholesale.
+    const replaced = tavern.setMvuVariables(session.id, { playthrough: '3' })
+    expect(replaced.mvuVariables).toEqual({ playthrough: '3' })
+    expect(() => tavern.setMvuVariables('missing', {})).toThrow(/not attached/)
   })
 
   it('folds bindings from the session log and audits dangling references', async () => {

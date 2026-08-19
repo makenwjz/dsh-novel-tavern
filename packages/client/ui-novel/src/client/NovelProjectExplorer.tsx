@@ -32,7 +32,7 @@ export type NovelProjectExplorerProps =
   & InjectFace<NovelExplorerInjected>
 
 /** One tavern worldbook node with its entries. */
-type TavernWorldBookRow = { id: WorldBookId; name: string; entries: Array<{ keys: string[]; content: string; comment: string }> }
+type TavernWorldBookRow = { id: WorldBookId; name: string; entries: Array<{ name: string; keys: string[]; content: string; comment: string; enabled: boolean }> }
 
 /** One tavern character node. */
 type TavernCharacterRow = { id: CharacterId; name: string; format: 'json' | 'png'; extensions: Record<string, unknown>; hasAvatar: boolean }
@@ -55,7 +55,7 @@ async function loadTavernTree(api: Pick<IApiClient, 'tavern'>): Promise<TavernTr
     worldbooks: result.result.value.worldbooks.map(book => ({
       id: book.id,
       name: book.name,
-      entries: book.entries.map(entry => ({ keys: [...entry.keys], content: entry.content, comment: entry.comment })),
+      entries: book.entries.map(entry => ({ name: entry.name, keys: [...entry.keys], content: entry.content, comment: entry.comment, enabled: entry.enabled })),
     })),
     characters: result.result.value.characters.map(character => ({
       id: character.id,
@@ -412,6 +412,27 @@ export function NovelProjectExplorer({ useStore, actions, read, api, useSessions
           <ul className={css.detailList}>
             {book.entries.map((entry, index) => (
               <li key={index} className={css.entryCard}>
+                <label className={css.entryToggle}>
+                  <input
+                    type="checkbox"
+                    checked={entry.enabled}
+                    aria-label={t('entryToggle', { name: entry.comment || entry.name })}
+                    onChange={event => {
+                      const enabled = event.target.checked
+                      void api.tavern.setWorldBookEntryEnabled({ id: book.id as never, entryName: entry.name || entry.comment, enabled }).then(result => {
+                        if (!result.result.ok) {
+                          setNotice({ kind: 'error', text: t('importFailed', { reason: result.result.error.message }) })
+                          return
+                        }
+                        setNotice({ kind: 'success', text: t('entryUpdated') })
+                        reloadTavern()
+                      }, () => {})
+                    }}
+                  />
+                  <span className={entry.enabled ? css.entryToggleOn : css.entryToggleOff}>
+                    {entry.enabled ? t('entryEnabled') : t('entryDisabled')}
+                  </span>
+                </label>
                 <strong>{entry.keys.length > 0 ? entry.keys.join('、') : t('entryNoKeys')}</strong>
                 {entry.comment.length === 0 ? null : <span className={css.muted}>{entry.comment}</span>}
                 <p>{entry.content}</p>

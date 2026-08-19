@@ -113,6 +113,10 @@ export const zh = {
   bridgeOpening: '已按卡片设置切换开场白：{name}',
   bridgeWorldbook: '已按卡片设置更新世界书条目。',
   bridgeCardAction: '卡片操作已执行。',
+  entryToggle: '启用/禁用世界书条目 {name}',
+  entryEnabled: '启用',
+  entryDisabled: '禁用',
+  entryUpdated: '已更新世界书条目。',
 } satisfies Record<string, string>
 
 /** Novel workspace locale key union. */
@@ -231,4 +235,8 @@ export const en = {
   bridgeOpening: 'Opening switched by the card: {name}',
   bridgeWorldbook: 'Worldbook entries updated by the card.',
   bridgeCardAction: 'Card action performed.',
+  entryToggle: 'Toggle worldbook entry {name}',
+  entryEnabled: 'on',
+  entryDisabled: 'off',
+  entryUpdated: 'Worldbook entry updated.',
 } satisfies Record<NovelLocaleKey, string>
