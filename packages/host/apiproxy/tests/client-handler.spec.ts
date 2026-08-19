@@ -140,6 +140,9 @@ function scriptedApi(overrides: {
     tavern: {
       listWorldBooks: r => ok(r, { worldbooks: [] }),
       importWorldBook: r => ok(r, { worldbook: { id: 'worldbook-w1' as never, name: '青鸾山志', entryCount: 1 } }),
+      importPromptPreset: r => ok(r, { preset: { id: 'preset-p1' as never, name: '预设', promptCount: 1, enabledCount: 1 } }),
+      listPromptPresets: r => ok(r, { presets: [] }),
+      deletePromptPreset: r => ok(r, { deleted: true }),
       deleteWorldBook: r => ok(r, { deleted: true }),
       listCharacters: r => ok(r, { characters: [] }),
       importCharacter: r => ok(r, { character: { id: 'character-c1' as never, name: 'Aya', format: 'json' } }),
@@ -479,6 +482,9 @@ describe('tavern domain round trip', () => {
       tavern: {
         listWorldBooks: recorder('tavern.listWorldBooks', r => ok(r, { worldbooks: [{ id: 'worldbook-w1' as never, name: '青鸾山志', entryCount: 2 }] })),
         importWorldBook: recorder('tavern.importWorldBook', r => ok(r, { worldbook: { id: 'worldbook-w1' as never, name: '青鸾山志', entryCount: 2 } })),
+        importPromptPreset: recorder('tavern.importPromptPreset', r => ok(r, { preset: { id: 'preset-p1' as never, name: '预设', promptCount: 1, enabledCount: 1 } })),
+        listPromptPresets: recorder('tavern.listPromptPresets', r => ok(r, { presets: [] })),
+        deletePromptPreset: recorder('tavern.deletePromptPreset', r => ok(r, { deleted: true })),
         deleteWorldBook: recorder('tavern.deleteWorldBook', r => ok(r, { deleted: true })),
         listCharacters: recorder('tavern.listCharacters', r => ok(r, { characters: [{ id: 'character-c1' as never, name: 'Aya', format: 'json' }] })),
         importCharacter: recorder('tavern.importCharacter', r => ok(r, { character: { id: 'character-c1' as never, name: 'Aya', format: 'json' } })),

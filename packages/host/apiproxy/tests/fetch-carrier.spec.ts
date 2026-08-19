@@ -293,6 +293,15 @@ function fakeApi(overrides: Partial<{ muxFrames: MuxFrame[]; hostFrames: HostFra
       async importWorldBook(request) {
         return { rpcId: request.rpcId, result: { ok: true, value: { worldbook: { id: 'worldbook-w1' as never, name: '志', entryCount: 0 } } } }
       },
+      async importPromptPreset(request) {
+        return { rpcId: request.rpcId, result: { ok: true, value: { preset: { id: 'preset-p1' as never, name: '预设', promptCount: 1, enabledCount: 1 } } } }
+      },
+      async listPromptPresets(request) {
+        return { rpcId: request.rpcId, result: { ok: true, value: { presets: [] } } }
+      },
+      async deletePromptPreset(request) {
+        return { rpcId: request.rpcId, result: { ok: true, value: { deleted: true } } }
+      },
       async deleteWorldBook(request) {
         return { rpcId: request.rpcId, result: { ok: true, value: { deleted: true } } }
       },
