@@ -326,6 +326,15 @@ function fakeApi(overrides: Partial<{ muxFrames: MuxFrame[]; hostFrames: HostFra
       async advanceStage(request) {
         return { rpcId: request.rpcId, result: { ok: true, value: { binding: { mode: 'novel', worldbookIds: [], characterId: null } } } }
       },
+      async setGreeting(request) {
+        return { rpcId: request.rpcId, result: { ok: true, value: { appended: true } } }
+      },
+      async setMvu(request) {
+        return { rpcId: request.rpcId, result: { ok: true, value: { binding: { mode: 'tavern', worldbookIds: [], characterId: null } } } }
+      },
+      async setWorldBookEntryEnabled(request) {
+        return { rpcId: request.rpcId, result: { ok: true, value: { updated: true } } }
+      },
       async scoreCharacter(request) {
         return { rpcId: request.rpcId, result: { ok: true, value: { score: { overall: 8, clarity: 9, consistency: 7, tokenEfficiency: 6, note: 'ok' } } } }
       },
