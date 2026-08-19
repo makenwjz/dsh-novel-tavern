@@ -249,6 +249,27 @@ describe('TavernService store', () => {
     expect(() => tavern.setMvuVariables('missing', {})).toThrow(/not attached/)
   })
 
+  it('imports, lists, and deletes prompt presets with bound-session guard', async () => {
+    const { ctx, tavern } = await mount()
+    const presetSource = JSON.stringify({
+      name: '测试预设',
+      prompts: [{ identifier: 'p1', name: '一', role: 'system', content: '你是 {{char}}。' }],
+      prompt_order: [{ character_id: 100001, order: [{ identifier: 'p1', enabled: true }] }],
+    })
+    const view = tavern.importPromptPreset(presetSource)
+    expect(view.name).toBe('测试预设')
+    expect(view.promptCount).toBe(1)
+    expect(tavern.listPromptPresets().map(row => row.id)).toContain(view.id)
+    // A session binding the preset blocks deletion.
+    bind(ctx, { mode: 'tavern', worldbookIds: [], characterId: null, presetId: view.id })
+    expect(() => tavern.deletePromptPreset(view.id)).toThrow(/still bound/)
+    // An unbound preset deletes cleanly.
+    const unbound = tavern.importPromptPreset(JSON.stringify({ name: '空', prompts: [], prompt_order: [{ character_id: 100001, order: [] }] }))
+    tavern.deletePromptPreset(unbound.id)
+    expect(tavern.listPromptPresets().map(row => row.id)).not.toContain(unbound.id)
+    expect(() => tavern.importPromptPreset('{}')).toThrow(/prompts and prompt_order/)
+  })
+
   it('folds bindings from the session log and audits dangling references', async () => {
     const { ctx, tavern } = await mount()
     const book = tavern.importWorldBook(JSON.stringify(WORLD_BOOK))

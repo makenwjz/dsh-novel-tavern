@@ -27,6 +27,7 @@
 - [x] **promptOnly 正则脚本执行** —— 卡里作用于 prompt 的脚本（变量更新对 AI 不可见、屏蔽思维链复读等）在注入端应用。
 - [x] **MVU 变量系统** —— 会话级 MVU 状态（绑定存储 + 注入 `## 角色状态`）；桥接 `replaceMvuData` 真实更新；模型 `<json_patch>` 块自动回放（开场白初始化 + 每轮更新）。
 - [x] **世界书条目手动编辑** —— 资料库每条世界书可独立启用/禁用，持久化到存储文件（SillyTavern 书编辑器行为）；卡前端会话级覆盖在此基础上生效。
+- [x] **Prompt Preset 导入与组装** —— 导入 SillyTavern Chat Completion Preset，按作者顺序组装 prompt（marker 解析 + 宏替换），参考 dsh-rp-distribution 的机制。
 
 ## v0.2 P0 清单（小说）
 

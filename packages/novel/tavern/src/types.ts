@@ -4,8 +4,43 @@ import type { Branded } from '@deepseek-ai/dsh-brand'
 export type WorldBookId = Branded<'tavern:worldbook'>
 /** Opaque identifier of one imported character card, minted by the service. */
 export type CharacterId = Branded<'tavern:character'>
+/** Opaque identifier of one imported prompt preset, minted by the service. */
+export type PromptPresetId = Branded<'tavern:preset'>
 /** The per-session injection mode: novel writing or tavern roleplay. */
 export type TavernMode = 'novel' | 'tavern'
+
+/** One ordered prompt section from an imported SillyTavern Chat Completion Preset. */
+export interface PresetSection {
+  /** The prompt definition identifier. */
+  readonly id: string
+  /** Display name (falls back to the identifier). */
+  readonly name: string
+  /** The message role: system, user, or assistant. */
+  readonly role: 'system' | 'user' | 'assistant'
+  /** The prompt text (or a marker name when `marker` is true). */
+  readonly content: string
+  /** Marker entries (worldInfoBefore, charDescription, …) are resolved against
+   *  the bound resources instead of being injected verbatim. */
+  readonly marker: boolean
+}
+
+/** One imported SillyTavern Chat Completion Preset, normalized. */
+export interface PromptPreset {
+  /** The preset display name. */
+  readonly name: string
+  /** The enabled prompt sections of the selected ordering profile, in order. */
+  readonly sections: readonly PresetSection[]
+  /** Generation parameters (temperature, max tokens, …) kept as inert data. */
+  readonly generation: Readonly<Record<string, unknown>>
+}
+
+/** The management-list view of one imported prompt preset. */
+export interface PromptPresetView {
+  readonly id: PromptPresetId
+  readonly name: string
+  readonly promptCount: number
+  readonly enabledCount: number
+}
 
 /** One SillyTavern lorebook entry normalized to the supported field subset. */
 export interface LorebookEntry {
@@ -171,6 +206,9 @@ export interface TavernBindingData {
    *  into the prompt as `## 角色状态`. Cards update it through the bridge
    *  (`replaceMvuData`) and through the model's `<json_patch>` blocks. */
   readonly mvuVariables?: Readonly<Record<string, string>>
+  /** The imported prompt preset whose ordered sections assemble this session's
+   *  prompt (a SillyTavern Chat Completion Preset). */
+  readonly presetId?: PromptPresetId
 }
 
 /** One dangling binding reference found by the invariant check. */

@@ -10,7 +10,7 @@
  */
 
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import type { CardScore, CharacterId, TavernBindingData, WorldBookId } from '@deepseek-ai/dsh-tavern/types'
+import type { CardScore, CharacterId, PromptPresetId, PromptPresetView, TavernBindingData, WorldBookId } from '@deepseek-ai/dsh-tavern/types'
 import type { RpcRequest, RpcResponse } from './rpc.ts'
 
 /** One lorebook list row: the store view minus the entry bodies. */
@@ -42,6 +42,15 @@ export interface TavernApi {
 
   /** Import one SillyTavern lorebook JSON export into the store. */
   importWorldBook(request: RpcRequest<{ content: string }>): Promise<RpcResponse<{ worldbook: TavernWorldBookView }>>
+
+  /** Import one SillyTavern Chat Completion Preset into the store. */
+  importPromptPreset(request: RpcRequest<{ content: string }>): Promise<RpcResponse<{ preset: PromptPresetView }>>
+
+  /** List the imported prompt presets in name order. */
+  listPromptPresets(request: RpcRequest<{}>): Promise<RpcResponse<{ presets: PromptPresetView[] }>>
+
+  /** Delete a prompt preset, failing loud while any session's binding references it. */
+  deletePromptPreset(request: RpcRequest<{ id: PromptPresetId }>): Promise<RpcResponse<{ deleted: true }>>
 
   /** Delete a lorebook, failing loud while any session's binding references it. */
   deleteWorldBook(request: RpcRequest<{ id: WorldBookId }>): Promise<RpcResponse<{ deleted: true }>>
@@ -76,6 +85,7 @@ export interface TavernApi {
     characterId?: CharacterId
     characterIds?: CharacterId[]
     worldbookIds: WorldBookId[]
+    presetId?: PromptPresetId
   }>): Promise<RpcResponse<{ binding: TavernBindingWire }>>
 
   /** Leave tavern mode: keep the lorebook binding, drop the character. */

@@ -10,7 +10,7 @@
 import { deriveEventMessage } from '@deepseek-ai/dsh-session'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import { substituteMacros } from './character.ts'
-import type { ActivatedLore, CharacterProfile, TavernBindingData } from './types.ts'
+import type { ActivatedLore, CharacterProfile, PresetSection, TavernBindingData } from './types.ts'
 
 /** Structural shape check for one binding event payload. */
 function isBindingData(value: unknown): value is TavernBindingData {
@@ -68,6 +68,48 @@ function parseFindRegex(findRegex: string): { pattern: string; flags: string } {
 
 /** One prompt-side regex script from a card's `regex_scripts` extension. */
 export type PromptScript = { findRegex: string; replaceString: string; enabled: boolean; promptOnly: boolean }
+
+/** Render an imported prompt preset's ordered sections (a SillyTavern Chat
+ *  Completion Preset). Marker entries resolve against the bound resources;
+ *  regular entries render verbatim with `{{char}}`/`{{user}}` substituted.
+ *  The author's ordering wins over the fixed built-in block layout. */
+export function renderPresetSection(
+  preset: { readonly name: string; readonly sections: readonly PresetSection[] },
+  characters: readonly CharacterProfile[],
+  loreBlock: string,
+): string {
+  const character = characters[0]
+  const parts: string[] = []
+  for (const section of preset.sections) {
+    if (section.role !== 'system' && section.role !== 'user') continue
+    if (section.marker) {
+      const marker = section.content.trim().toLowerCase()
+      if (marker === 'worldinfobefore' || marker === 'worldinfoafter') {
+        if (loreBlock.length > 0) parts.push(loreBlock.trimEnd())
+      } else if (character !== undefined) {
+        if (marker === 'chardescription') {
+          if (character.description.length > 0) parts.push(`## 角色介绍\n${character.description}`)
+        } else if (marker === 'charpersonality') {
+          if (character.personality.length > 0) parts.push(`## 角色性格\n${character.personality}`)
+        } else if (marker === 'scenario') {
+          if (character.scenario.length > 0) parts.push(`## 当前场景\n${character.scenario}`)
+        } else if (marker === 'dialogueexamples') {
+          if (character.mesExample.length > 0) parts.push(`## 对话示例\n${character.mesExample}`)
+        }
+        // chatHistory is carried by the native session log; personaDescription
+        // has no DSH persona yet — both resolve to nothing.
+      }
+      continue
+    }
+    const substituted = character === undefined
+      ? section.content.replace(/\{\{user\}\}/g, '用户').replace(/\{\{char\}\}/g, '角色')
+      : substituteMacros(character, section.content)
+    if (substituted.trim().length > 0) parts.push(substituted.trim())
+  }
+  return parts.join('\n\n')
+}
+
+/** One rendered character-card line; empty fields emit nothing. */
 
 /** Apply a card's prompt-side (`promptOnly`) regex scripts to the rendered
  *  section text, the way SillyTavern post-processes the prompt: scripts that
@@ -190,6 +232,7 @@ export function renderTavernSection(input: {
   lean?: boolean
   openingPresent?: boolean
   mvuVariables?: Readonly<Record<string, string>>
+  preset?: { readonly name: string; readonly sections: readonly PresetSection[] } | null
 }): string {
   const lean = input.lean === true
   const entries = input.activated.filter(item => item.entry.content.length > 0)
@@ -198,6 +241,9 @@ export function renderTavernSection(input: {
     : '## 已激活的世界书设定\n当前文本激活了以下世界设定，回答时不得与之矛盾：\n'
       + entries.map(item => `- 《${item.bookName}》：${item.entry.content}`).join('\n')
       + '\n'
+  if (input.preset !== null && input.preset !== undefined) {
+    return renderPresetSection(input.preset, input.characters, loreBlock)
+  }
   if (input.binding.mode === 'novel' || input.characters.length === 0) return loreBlock
   const substituted = input.characters.map(character => substituteProfile(character))
   if (substituted.length === 1) {

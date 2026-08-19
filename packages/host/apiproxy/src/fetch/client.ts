@@ -66,6 +66,9 @@ import {
   tavernSetWorldBookEntryEnabledValueSchema,
   tavernImportCharacterValueSchema,
   tavernImportWorldBookValueSchema,
+  tavernImportPromptPresetValueSchema,
+  tavernListPromptPresetsValueSchema,
+  tavernDeletePromptPresetValueSchema,
   tavernLeanValueSchema,
   tavernListCharactersValueSchema,
   tavernListWorldBooksValueSchema,
@@ -168,6 +171,9 @@ export interface IApiClient {
   tavern: {
     listWorldBooks(payload: RequestPayload<'tavern.listWorldBooks'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'tavern.listWorldBooks'>>>
     importWorldBook(payload: RequestPayload<'tavern.importWorldBook'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'tavern.importWorldBook'>>>
+    importPromptPreset(payload: RequestPayload<'tavern.importPromptPreset'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'tavern.importPromptPreset'>>>
+    listPromptPresets(payload: RequestPayload<'tavern.listPromptPresets'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'tavern.listPromptPresets'>>>
+    deletePromptPreset(payload: RequestPayload<'tavern.deletePromptPreset'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'tavern.deletePromptPreset'>>>
     deleteWorldBook(payload: RequestPayload<'tavern.deleteWorldBook'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'tavern.deleteWorldBook'>>>
     setWorldBookEntryEnabled(payload: RequestPayload<'tavern.setWorldBookEntryEnabled'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'tavern.setWorldBookEntryEnabled'>>>
     listCharacters(payload: RequestPayload<'tavern.listCharacters'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'tavern.listCharacters'>>>
@@ -255,6 +261,9 @@ const UNARY_VALUE_SCHEMAS: { [K in keyof RpcMethodMap]: z.ZodType<Wire<ResponseV
   'goal.clear': goalClearValueSchema,
   'tavern.listWorldBooks': tavernListWorldBooksValueSchema,
   'tavern.importWorldBook': tavernImportWorldBookValueSchema,
+  'tavern.importPromptPreset': tavernImportPromptPresetValueSchema,
+  'tavern.listPromptPresets': tavernListPromptPresetsValueSchema,
+  'tavern.deletePromptPreset': tavernDeletePromptPresetValueSchema,
   'tavern.deleteWorldBook': tavernDeleteWorldBookValueSchema,
   'tavern.setWorldBookEntryEnabled': tavernSetWorldBookEntryEnabledValueSchema,
   'tavern.listCharacters': tavernListCharactersValueSchema,
@@ -544,6 +553,9 @@ export abstract class AbstractApiClient implements IApiClient {
   readonly tavern: IApiClient['tavern'] = {
     listWorldBooks: (payload, signal) => this.callUnary('tavern.listWorldBooks', payload, signal),
     importWorldBook: (payload, signal) => this.callUnary('tavern.importWorldBook', payload, signal),
+    importPromptPreset: (payload, signal) => this.callUnary('tavern.importPromptPreset', payload, signal),
+    listPromptPresets: (payload, signal) => this.callUnary('tavern.listPromptPresets', payload, signal),
+    deletePromptPreset: (payload, signal) => this.callUnary('tavern.deletePromptPreset', payload, signal),
     deleteWorldBook: (payload, signal) => this.callUnary('tavern.deleteWorldBook', payload, signal),
     setWorldBookEntryEnabled: (payload, signal) => this.callUnary('tavern.setWorldBookEntryEnabled', payload, signal),
     listCharacters: (payload, signal) => this.callUnary('tavern.listCharacters', payload, signal),

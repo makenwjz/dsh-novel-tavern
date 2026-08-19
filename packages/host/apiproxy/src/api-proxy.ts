@@ -1851,20 +1851,20 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
   function tavernStoreError(
     request: RpcRequest<unknown>,
     error: unknown,
-    kind: 'worldbook' | 'character',
+    kind: 'worldbook' | 'character' | 'preset',
     phase: 'import' | 'delete',
   ): RpcResponse<never> {
     const message = error instanceof Error ? error.message : String(error)
     if (phase === 'import') {
-      return err(request, { code: 'tavern-import-invalid', message, details: { kind, reason: message } })
+      return err(request, { code: 'tavern-import-invalid', message, details: { kind: kind as 'worldbook' | 'character', reason: message } })
     }
     const id = /"([^"]+)"/.exec(message)?.[1] ?? ''
     if (message.includes('still bound')) {
       const sessions = /session\(s\) (.+)$/.exec(message)?.[1]?.split(', ') ?? []
-      return err(request, { code: 'tavern-still-bound', message, details: { kind, id, sessions } })
+      return err(request, { code: 'tavern-still-bound', message, details: { kind: kind as 'worldbook' | 'character', id, sessions } })
     }
     if (message.includes('not found')) {
-      return err(request, { code: 'tavern-not-found', message, details: { kind, id } })
+      return err(request, { code: 'tavern-not-found', message, details: { kind: kind as 'worldbook' | 'character', id } })
     }
     return err(request, { code: 'internal', message, details: {} })
   }
@@ -3168,6 +3168,37 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
         }
       },
 
+      async importPromptPreset(request) {
+        const tavern = tavernStore()
+        if ('error' in tavern) return err(request, tavern.error)
+        try {
+          return ok(request, { preset: tavern.importPromptPreset(request.payload.content) })
+        } catch (error: unknown) {
+          return tavernStoreError(request, error, 'preset', 'import')
+        }
+      },
+
+      async listPromptPresets(request) {
+        const tavern = tavernStore()
+        if ('error' in tavern) return err(request, tavern.error)
+        try {
+          return ok(request, { presets: tavern.listPromptPresets() })
+        } catch (error: unknown) {
+          return tavernStoreError(request, error, 'preset', 'import')
+        }
+      },
+
+      async deletePromptPreset(request) {
+        const tavern = tavernStore()
+        if ('error' in tavern) return err(request, tavern.error)
+        try {
+          tavern.deletePromptPreset(request.payload.id)
+          return ok(request, { deleted: true as const })
+        } catch (error: unknown) {
+          return tavernStoreError(request, error, 'preset', 'delete')
+        }
+      },
+
       async importWorldBook(request) {
         const tavern = tavernStore()
         if ('error' in tavern) return err(request, tavern.error)
@@ -3252,12 +3283,13 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
       },
 
       async startRoleplay(request) {
-        const { characterId, characterIds, worldbookIds } = request.payload
+        const { characterId, characterIds, worldbookIds, presetId } = request.payload
         const binding: TavernBindingData = {
           mode: 'tavern',
           worldbookIds,
           characterId: characterId ?? null,
           ...(characterIds === undefined ? {} : { characterIds }),
+          ...(presetId === undefined ? {} : { presetId }),
         }
         return applyBinding(request, binding)
       },

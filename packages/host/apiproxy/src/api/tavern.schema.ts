@@ -30,10 +30,49 @@ const bindingWireSchema = z.object({
   stage: z.number().int().min(0).optional(),
   disabledEntryNames: z.array(z.string()).optional(),
   mvuVariables: z.record(z.string(), z.string()).optional(),
+  presetId: z.string().optional(),
 })
 
 /** tavern.listWorldBooks request payload (none). */
 export const tavernListWorldBooksRequestSchema = z.object({}) as unknown as z.ZodType<Wire<RequestPayload<'tavern.listWorldBooks'>>>
+
+/** tavern.importPromptPreset request payload. */
+export const tavernImportPromptPresetRequestSchema = z.object({
+  content: z.string(),
+}) as unknown as z.ZodType<Wire<RequestPayload<'tavern.importPromptPreset'>>>
+
+/** tavern.importPromptPreset response value. */
+export const tavernImportPromptPresetValueSchema = z.object({
+  preset: z.object({
+    id: z.string(),
+    name: z.string(),
+    promptCount: z.number().int().min(0),
+    enabledCount: z.number().int().min(0),
+  }),
+}) as unknown as z.ZodType<Wire<ResponseValue<'tavern.importPromptPreset'>>>
+
+/** tavern.listPromptPresets request payload (none). */
+export const tavernListPromptPresetsRequestSchema = z.object({}) as unknown as z.ZodType<Wire<RequestPayload<'tavern.listPromptPresets'>>>
+
+/** tavern.listPromptPresets response value. */
+export const tavernListPromptPresetsValueSchema = z.object({
+  presets: z.array(z.object({
+    id: z.string(),
+    name: z.string(),
+    promptCount: z.number().int().min(0),
+    enabledCount: z.number().int().min(0),
+  })),
+}) as unknown as z.ZodType<Wire<ResponseValue<'tavern.listPromptPresets'>>>
+
+/** tavern.deletePromptPreset request payload. */
+export const tavernDeletePromptPresetRequestSchema = z.object({
+  id: z.string(),
+}) as unknown as z.ZodType<Wire<RequestPayload<'tavern.deletePromptPreset'>>>
+
+/** tavern.deletePromptPreset response value. */
+export const tavernDeletePromptPresetValueSchema = z.object({
+  deleted: z.literal(true),
+}) as unknown as z.ZodType<Wire<ResponseValue<'tavern.deletePromptPreset'>>>
 
 /** tavern.listWorldBooks response value. */
 export const tavernListWorldBooksValueSchema = z.object({
@@ -128,6 +167,7 @@ export const tavernStartRoleplayRequestSchema = z.object({
   characterId: z.string().optional(),
   characterIds: z.array(z.string()).optional(),
   worldbookIds: z.array(z.string()),
+  presetId: z.string().optional(),
 }) as unknown as z.ZodType<Wire<RequestPayload<'tavern.startRoleplay'>>>
 
 /** tavern.startRoleplay response value. */

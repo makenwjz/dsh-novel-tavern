@@ -2996,6 +2996,9 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
     tavern: {
       listWorldBooks: request => ok(request, { worldbooks: [] }),
       importWorldBook: request => ok(request, { worldbook: { id: 'worldbook-w1' as never, name: 'Worldbook', entryCount: 0 } }),
+      importPromptPreset: request => ok(request, { preset: { id: 'preset-p1' as never, name: 'Preset', promptCount: 1, enabledCount: 1 } }),
+      listPromptPresets: request => ok(request, { presets: [] }),
+      deletePromptPreset: request => ok(request, { deleted: true }),
       deleteWorldBook: request => ok(request, { deleted: true }),
       setWorldBookEntryEnabled: request => ok(request, { updated: true }),
       listCharacters: request => ok(request, { characters: [] }),

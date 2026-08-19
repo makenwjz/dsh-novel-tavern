@@ -24,6 +24,7 @@ import type {} from '@deepseek-ai/dsh-llm'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import { activateEntries, parseLorebook } from './lorebook.ts'
 import { extractEmbeddedWorldBook, parseCharacterJson, parseCharacterPng, parseCharacterPngRaw } from './character.ts'
+import { parsePromptPreset } from './preset.ts'
 import { applyPromptScripts, foldBinding, hasOpeningMessage, recentText, renderTavernSection, type PromptScript } from './section.ts'
 import type {
   ActivatedLore,
@@ -33,6 +34,9 @@ import type {
   CharacterView,
   DanglingBinding,
   Lorebook,
+  PromptPreset,
+  PromptPresetId,
+  PromptPresetView,
   TavernBindingData,
   TavernProjectTree,
   WorldBookId,
@@ -103,9 +107,10 @@ function parseScore(text: string): CardScore {
 }
 
 /** The stored-file extensions of one collection. */
-const STORE_EXTENSIONS: Record<'worldbooks' | 'characters', string[]> = {
+const STORE_EXTENSIONS: Record<'worldbooks' | 'characters' | 'presets', string[]> = {
   worldbooks: ['json'],
   characters: ['json', 'png'],
+  presets: ['json'],
 }
 
 declare module '@deepseek-ai/cordis' {
@@ -182,6 +187,7 @@ export class TavernService extends Service {
     this.scoreMaxTokens = config.scoreMaxTokens ?? 500
     mkdirSync(join(this.root, 'worldbooks'), { recursive: true })
     mkdirSync(join(this.root, 'characters'), { recursive: true })
+    mkdirSync(join(this.root, 'presets'), { recursive: true })
     ctx.systemPrompt.section({
       name: 'tavern:context',
       order: 40,
@@ -202,6 +208,7 @@ export class TavernService extends Service {
             lean: this.lean,
             openingPresent: hasOpeningMessage(session.events),
             ...(binding.mvuVariables === undefined ? {} : { mvuVariables: binding.mvuVariables }),
+            ...(binding.presetId === undefined ? {} : { preset: this.promptPreset(binding.presetId) }),
           })
           // The card's prompt-side regex scripts hide variable machinery from
           // the model (e.g. "变量更新对AI不可见") and trim repetitive text.
@@ -255,6 +262,54 @@ export class TavernService extends Service {
    */
   deleteWorldBook(id: WorldBookId): void {
     this.deleteFile('worldbooks', 'worldbook', id)
+  }
+
+  /**
+   * Import one SillyTavern Chat Completion Preset (referencing the
+   * `@dsh-rp/compat-sillytavern` format): prompts + prompt_order profiles are
+   * normalized to ordered sections; generation parameters stay inert.
+   * @param content - the preset JSON document.
+   * @returns the stored preset row.
+   */
+  importPromptPreset(content: string): PromptPresetView {
+    const preset = parsePromptPreset(content)
+    const id = mintId('preset' as never) as PromptPresetId
+    writeFileSync(join(this.root, 'presets', `${id}.json`), JSON.stringify(preset, null, 2), 'utf-8')
+    return { id, name: preset.name, promptCount: preset.sections.length, enabledCount: preset.sections.length }
+  }
+
+  /**
+   * Every imported prompt preset, ordered by name.
+   * @returns the preset rows.
+   */
+  listPromptPresets(): PromptPresetView[] {
+    return this.scanStore<PromptPresetView>('presets', 'json', (_file, id) => {
+      const preset = this.promptPreset(id as PromptPresetId)
+      return { id: id as PromptPresetId, name: preset.name, promptCount: preset.sections.length, enabledCount: preset.sections.length }
+    })
+  }
+
+  /**
+   * Delete one prompt preset. Sessions whose binding still references the
+   * preset block the delete.
+   * @param id - the preset id.
+   */
+  deletePromptPreset(id: PromptPresetId): void {
+    this.deleteFile('presets', 'preset', id)
+  }
+
+  /** Load one stored prompt preset. */
+  private promptPreset(id: PromptPresetId): PromptPreset {
+    const file = join(this.root, 'presets', `${id}.json`)
+    if (!existsSync(file)) throw new Error(`tavern: preset ${JSON.stringify(id)} not found`)
+    const parsed = JSON.parse(readFileSync(file, 'utf-8')) as unknown
+    if (typeof parsed !== 'object' || parsed === null) throw new Error(`tavern: preset ${JSON.stringify(id)} is malformed`)
+    const preset = parsed as PromptPreset
+    return {
+      name: preset.name,
+      sections: Array.isArray(preset.sections) ? preset.sections : [],
+      generation: preset.generation ?? {},
+    }
   }
 
   /**
@@ -660,23 +715,23 @@ export class TavernService extends Service {
   }
 
   /** Scan one store directory, parsing every file of one extension. */
-  private scanStore<T>(directory: 'worldbooks' | 'characters', extension: string, project: (file: string, id: string) => T): T[] {
+  private scanStore<T>(directory: 'worldbooks' | 'characters' | 'presets', extension: string, project: (file: string, id: string) => T): T[] {
     return readdirSync(join(this.root, directory))
       .filter(name => name.endsWith(`.${extension}`))
       .map(name => project(join(this.root, directory, name), name.slice(0, -extension.length - 1)))
   }
 
   /** The existing store file of one id, or undefined. */
-  private storeFile(directory: 'worldbooks' | 'characters', kind: 'worldbook' | 'character', id: string): string | undefined {
-    validateId(kind, id)
+  private storeFile(directory: 'worldbooks' | 'characters' | 'presets', kind: 'worldbook' | 'character' | 'preset', id: string): string | undefined {
+    validateId(kind as 'worldbook' | 'character', id)
     return STORE_EXTENSIONS[directory]
       .map(candidate => join(this.root, directory, `${id}.${candidate}`))
       .find(existsSync)
   }
 
   /** Delete one store file, blocked while any attached session binds it. */
-  private deleteFile(directory: 'worldbooks' | 'characters', kind: 'worldbook' | 'character', id: string): void {
-    validateId(kind, id)
+  private deleteFile(directory: 'worldbooks' | 'characters' | 'presets', kind: 'worldbook' | 'character' | 'preset', id: string): void {
+    validateId(kind as 'worldbook' | 'character', id)
     const bound = this.boundSessions(kind, id)
     if (bound.length > 0) {
       throw new Error(`tavern: ${kind} ${JSON.stringify(id)} is still bound by session(s) ${bound.join(', ')}`)
@@ -687,14 +742,16 @@ export class TavernService extends Service {
   }
 
   /** Every attached session whose folded binding references one store id. */
-  private boundSessions(kind: 'worldbook' | 'character', id: string): string[] {
+  private boundSessions(kind: 'worldbook' | 'character' | 'preset', id: string): string[] {
     const sessions: string[] = []
     for (const session of this.ctx.sessions.list()) {
       const binding = foldBinding(session.events)
       if (binding === null) continue
       const references = kind === 'worldbook'
         ? binding.worldbookIds.includes(id as WorldBookId)
-        : binding.characterId === (id as CharacterId)
+        : kind === 'character'
+          ? binding.characterId === (id as CharacterId) || (binding.characterIds ?? []).includes(id as CharacterId)
+          : binding.presetId === (id as PromptPresetId)
       if (references) sessions.push(session.id)
     }
     return sessions

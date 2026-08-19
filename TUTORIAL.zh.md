@@ -65,6 +65,7 @@ DeepSeek Harness（DSH）本身是一个 **Plugin-based Agent Harness**（基于
 | promptOnly 脚本 | 卡里作用于 prompt 的脚本（变量更新对 AI 不可见、屏蔽思维链复读等）在注入端执行，模型看不到的机制不占上下文 |
 | MVU 变量系统 | 会话级角色变量（`## 角色状态` 注入 prompt）；卡封面按钮经桥接 `replaceMvuData` 真实更新变量；模型每轮 `<json_patch>` 自动回放（周目/章节/场景名等） |
 | 世界书条目编辑 | 资料库每条世界书可独立启用/禁用（持久化到存储文件）；卡前端周目切换在会话级覆盖生效 |
+| Prompt Preset | 导入 SillyTavern Chat Completion Preset，按作者顺序组装 prompt：marker（世界书/角色介绍/性格/场景/对话示例）自动解析为对应资源，`{{char}}`/`{{user}}` 宏替换（参考 dsh-rp-distribution） |
 | 卡前端桥接 | 卡的封面脚本调用的 SillyTavern API（`getChatMessages`/`setChatMessage`/`setWorldbookEntry`/`updateWorldbookWith`/`showToast`）由桥接 shim 映射到 DSH：**进入魔女监牢 = 切换开场白；一周目/二周目切换 = 按条目名启用/禁用世界书**（会话级，不硬编码卡规则） |
 | 会话管理 | 解除绑定 / 删除对话（归档）、错误提示点名绑定会话并可一键跳转 |
 | 脚本清单 | 资料库角色卡详情展示卡携带的正则脚本/辅助脚本列表 |
