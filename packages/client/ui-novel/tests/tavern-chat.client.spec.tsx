@@ -46,6 +46,11 @@ function chatApi() {
       setLean: vi.fn(),
       advanceStage: vi.fn(),
       scoreCharacter: vi.fn(),
+      setWorldBookEntryEnabled: vi.fn(),
+      setMvu: vi.fn(),
+      importPromptPreset: vi.fn(),
+      listPromptPresets: vi.fn(),
+      deletePromptPreset: vi.fn(),
     },
     sessions: {
       list: vi.fn(),
@@ -77,6 +82,8 @@ function chatApi() {
   api.sessions.history.mockResolvedValue(ok({ events: [] }))
   api.sessions.prompt.mockResolvedValue(ok({ accepted: true }))
   api.tavern.setGreeting.mockResolvedValue(ok({ appended: true }))
+  api.tavern.listPromptPresets.mockResolvedValue(ok({ presets: [] }))
+  api.tavern.setWorldBookEntryEnabled.mockResolvedValue(ok({ updated: true }))
   api.workspace.list.mockResolvedValue(ok({ items: [], archivedSessionIds: [] }))
   api.workspace.archiveSession.mockResolvedValue(ok({ archivedSessionIds: [] }))
   return api

@@ -110,6 +110,8 @@ export function NovelProjectExplorer({ useStore, actions, read, api, useSessions
   // Tavern import/delete state (tavern mode only).
   const [notice, setNotice] = useState<{ kind: 'error' | 'success'; text: string; boundSessionIds?: string[] } | null>(null)
   const [worldBookDraft, setWorldBookDraft] = useState('')
+  const [presetDraft, setPresetDraft] = useState('')
+  const [presets, setPresets] = useState<Array<{ id: string; name: string; promptCount: number; enabledCount: number }>>([])
   const [busy, setBusy] = useState(false)
   // Session to open in the chat view when a blocked delete jumps there.
   const [focusSession, setFocusSession] = useState('')
@@ -122,13 +124,17 @@ export function NovelProjectExplorer({ useStore, actions, read, api, useSessions
       (value) => {
         if (!current) return
         if (mode === 'novel') setNovel(value as NovelWorkspaceSnapshot)
-        else setTree(value as TavernTree)
+        else {
+          setTree(value as TavernTree)
+          reloadPresets()
+        }
       },
       (reason: unknown) => {
         if (current) setError(reason instanceof Error ? reason.message : String(reason))
       },
     )
     return () => { current = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, mode, read, api, reloadKey])
 
   useEffect(() => {
@@ -203,6 +209,69 @@ export function NovelProjectExplorer({ useStore, actions, read, api, useSessions
   /** Reload the tavern tree after an import/delete mutation. */
   const reloadTavern = (): void => {
     setReloadKey(value => value + 1)
+  }
+
+  /** Refresh the imported prompt preset list. */
+  const reloadPresets = (): void => {
+    void api.tavern.listPromptPresets({}).then((result) => {
+      if (result.result.ok) {
+        setPresets(result.result.value.presets.map(preset => ({ id: preset.id, name: preset.name, promptCount: preset.promptCount, enabledCount: preset.enabledCount })))
+      }
+    }, () => {})
+  }
+
+  /** Run the prompt-preset import RPC and fold the result into state. */
+  const importPresetText = (content: string): void => {
+    void api.tavern.importPromptPreset({ content }).then((result) => {
+      const r = result.result
+      if (!r.ok) {
+        fail(new Error(r.error.message))
+      } else {
+        setPresetDraft('')
+        setNotice({ kind: 'success', text: t('importPresetOk', { name: r.value.preset.name, count: r.value.preset.promptCount }) })
+        reloadPresets()
+      }
+      setBusy(false)
+    }, fail)
+  }
+
+  /** Import a prompt preset .json file. */
+  const onPresetFile = (event: ChangeEvent<HTMLInputElement>): void => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (file === undefined || busy) return
+    setBusy(true)
+    setNotice(null)
+    const reader = new FileReader()
+    reader.onload = () => {
+      void importPresetText(String(reader.result ?? ''))
+    }
+    reader.readAsText(file)
+  }
+
+  /** Import preset JSON from pasted text. */
+  const importPresetDraft = (): void => {
+    if (presetDraft.trim().length === 0 || busy) return
+    setBusy(true)
+    setNotice(null)
+    void importPresetText(presetDraft)
+  }
+
+  /** Delete one imported prompt preset (blocked while a session binds it). */
+  const deletePreset = (id: string, name: string): void => {
+    if (busy) return
+    setBusy(true)
+    setNotice(null)
+    void api.tavern.deletePromptPreset({ id: id as never }).then((result) => {
+      const r = result.result
+      if (!r.ok) {
+        fail(new Error(r.error.message))
+      } else {
+        setNotice({ kind: 'success', text: t('presetDeleted', { name }) })
+        reloadPresets()
+      }
+      setBusy(false)
+    }, fail)
   }
 
   /** Import a character card file (.png card or .json) as base64. */
@@ -601,6 +670,42 @@ export function NovelProjectExplorer({ useStore, actions, read, api, useSessions
                   <button type="button" className={css.actionButton} disabled={busy} onClick={importWorldBookDraft}>
                     {busy ? t('importing') : t('importAction')}
                   </button>
+                  <h4 className={css.detailTitle}>{t('importPreset')}</h4>
+                  <label className={css.fileRow}>
+                    <span className={css.treeLabel}>{t('importPresetFile')}</span>
+                    <input
+                      type="file"
+                      accept=".json,application/json"
+                      aria-label={t('importPresetFile')}
+                      disabled={busy}
+                      onChange={onPresetFile}
+                    />
+                  </label>
+                  <p className={css.status}>{t('importPresetHint')}</p>
+                  <textarea
+                    className={css.pasteArea}
+                    aria-label={t('importPresetPaste')}
+                    placeholder={t('importPresetPaste')}
+                    value={presetDraft}
+                    disabled={busy}
+                    onChange={event => setPresetDraft(event.target.value)}
+                  />
+                  <button type="button" className={css.actionButton} disabled={busy} onClick={importPresetDraft}>
+                    {busy ? t('importing') : t('importPresetAction')}
+                  </button>
+                  {presets.length === 0 ? null : (
+                    <ul className={css.detailList}>
+                      {presets.map(preset => (
+                        <li key={preset.id} className={css.entryCard}>
+                          <strong>{preset.name}</strong>
+                          <span className={css.muted}>{t('presetCount', { enabled: preset.enabledCount, total: preset.promptCount })}</span>
+                          <button type="button" className={css.dangerButton} disabled={busy} onClick={() => deletePreset(preset.id, preset.name)}>
+                            {t('deletePresetAction')}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
                 <div className={css.roleplay}>
                   <h4 className={css.detailTitle}>{t('startRoleplay')}</h4>

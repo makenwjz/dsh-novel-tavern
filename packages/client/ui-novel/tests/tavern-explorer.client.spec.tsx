@@ -39,6 +39,12 @@ function tavernApi() {
     // Chat-view faces: the explorer now defaults to the WeChat-style chat.
     listCharacters: vi.fn(),
     listWorldBooks: vi.fn(),
+    setWorldBookEntryEnabled: vi.fn(),
+    setGreeting: vi.fn(),
+    setMvu: vi.fn(),
+    importPromptPreset: vi.fn(),
+    listPromptPresets: vi.fn(),
+    deletePromptPreset: vi.fn(),
   }
   api.projectTree.mockResolvedValue(ok({
     worldbooks: [{
@@ -57,6 +63,9 @@ function tavernApi() {
   api.binding.mockResolvedValue(ok({ binding: null }))
   api.listCharacters.mockResolvedValue(ok({ characters: [{ id: 'character-1', name: '阿雅', format: 'json' }] }))
   api.listWorldBooks.mockResolvedValue(ok({ worldbooks: [{ id: 'worldbook-1', name: '剑冢设定', entryCount: 1 }] }))
+  api.listPromptPresets.mockResolvedValue(ok({ presets: [] }))
+  api.importPromptPreset.mockResolvedValue(ok({ preset: { id: 'preset-1', name: '预设', promptCount: 2, enabledCount: 1 } }))
+  api.deletePromptPreset.mockResolvedValue(ok({ deleted: true }))
   return api
 }
 

@@ -48,6 +48,8 @@ type ChatSummary = {
   /** The session's binding ids, needed to rebuild the binding after card toggles. */
   readonly worldbookIds: string[]
   readonly characterIds: CharacterId[]
+  /** The bound prompt preset (SillyTavern Chat Completion Preset) id, or null. */
+  readonly presetId: string | null
   /** Worldbook entry names this session keeps disabled (driven by the card frontend). */
   readonly disabledEntryNames: string[]
   /** The session's MVU variable state (card variables, injected into the prompt). */
@@ -417,6 +419,8 @@ export function TavernChat({ api, t, useSessions, onNeedLibrary, focusSession }:
   const [sending, setSending] = useState(false)
   const [cards, setCards] = useState<CardInfo[]>([])
   const [worldbooks, setWorldbooks] = useState<WorldbookRow[]>([])
+  /** Imported prompt presets, offered in the session-resource picker. */
+  const [presets, setPresets] = useState<Array<{ id: string; name: string }>>([])
   const [avatars, setAvatars] = useState<Record<string, string>>({})
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
@@ -439,6 +443,29 @@ export function TavernChat({ api, t, useSessions, onNeedLibrary, focusSession }:
     mvuBaselineRef.current = summary?.mvuVariables ?? {}
   }, [active, chats])
 
+  /** Update the active session's binding (preset and/or worldbook selection)
+   *  through the API and mirror it into the local summary. */
+  const updateBinding = (patch: { presetId?: string | null; worldbookIds?: string[] }): void => {
+    const summary = chats.find(chat => chat.sessionId === active)
+    if (summary === undefined) return
+    const worldbookIds = patch.worldbookIds ?? [...summary.worldbookIds]
+    const presetId = patch.presetId === undefined ? summary.presetId : patch.presetId
+    const binding = {
+      mode: 'tavern' as const,
+      worldbookIds: worldbookIds as never,
+      characterId: null,
+      characterIds: summary.characterIds,
+      disabledEntryNames: summary.disabledEntryNames,
+      ...(presetId === null || presetId === undefined ? {} : { presetId: presetId as never }),
+    }
+    setChats(previous => previous.map(chat => chat.sessionId === active
+      ? { ...chat, presetId, worldbookIds }
+      : chat))
+    void api.tavern.setBinding({ sessionId: active as never, binding }).then(result => {
+      if (!result.result.ok) setError(t('chatError', { reason: result.result.error.message }))
+    }, () => {})
+  }
+
   /** Replay the model's `<json_patch>` blocks from the loaded rows onto the
    *  session's MVU variables and push the result when anything changed. */
   const syncMvuFromRows = (nextRows: ChatRow[]): void => {
@@ -460,13 +487,17 @@ export function TavernChat({ api, t, useSessions, onNeedLibrary, focusSession }:
     let current = true
     void Promise.all([
       api.tavern.projectTree({}),
+      api.tavern.listPromptPresets({}),
       api.sessions.list({}),
       api.workspace.list({}),
-    ]).then(async ([treeResult, sessionResult, workspaceResult]) => {
+    ]).then(async ([treeResult, presetResult, sessionResult, workspaceResult]) => {
       if (!current) return
       const archivedIds = workspaceResult.result.ok ? workspaceResult.result.value.archivedSessionIds : []
       const rows = treeResult.result.ok ? treeResult.result.value.characters : []
       const worldbooks: WorldbookRow[] = treeResult.result.ok ? treeResult.result.value.worldbooks : []
+      if (presetResult.result.ok) {
+        setPresets(presetResult.result.value.presets.map(preset => ({ id: preset.id, name: preset.name })))
+      }
       const bookById = new Map(worldbooks.map(book => [book.id, book]))
       const cardInfos: CardInfo[] = rows.map(row => ({
         id: row.id as CharacterId,
@@ -504,6 +535,7 @@ export function TavernChat({ api, t, useSessions, onNeedLibrary, focusSession }:
           characterIds: characterIds as CharacterId[],
           disabledEntryNames: [...(b.disabledEntryNames ?? [])],
           mvuVariables: { ...(b.mvuVariables ?? {}) },
+          presetId: b.presetId ?? null,
         })
       }
       setChats(summaries)
@@ -684,6 +716,7 @@ export function TavernChat({ api, t, useSessions, onNeedLibrary, focusSession }:
           characterIds: characterIds as CharacterId[],
           disabledEntryNames: [],
           mvuVariables: {},
+          presetId: null,
         },
       ])
       setActive(sessionId)
@@ -866,6 +899,49 @@ export function TavernChat({ api, t, useSessions, onNeedLibrary, focusSession }:
               <strong className={css.paneName}>{activeSummary.characterName}</strong>
               <span className={css.paneHint}>{activeSummary.title}</span>
               <span className={css.paneHeaderSpacer} />
+              <details className={css.resourcePopover}>
+                <summary className={css.resourceSummary}>{t('resourceSettings')}</summary>
+                <div className={css.resourcePanel}>
+                  <label className={css.resourceField}>
+                    <span>{t('presetPick')}</span>
+                    <select
+                      className={css.presetSelect}
+                      aria-label={t('presetPick')}
+                      value={activeSummary.presetId ?? ''}
+                      onChange={event => updateBinding({ presetId: event.target.value === '' ? null : event.target.value })}
+                    >
+                      <option value="">{t('presetNone')}</option>
+                      {presets.map(preset => (
+                        <option key={preset.id} value={preset.id}>{preset.name}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <fieldset className={css.worldbookField}>
+                    <legend>{t('worldbookPick')}</legend>
+                    {worldbooks.length === 0 ? (
+                      <p className={css.muted}>{t('worldbookEmpty')}</p>
+                    ) : worldbooks.map(book => {
+                      const checked = activeSummary.worldbookIds.includes(book.id)
+                      return (
+                        <label key={book.id} className={css.worldbookCheck}>
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            aria-label={book.name}
+                            onChange={event => {
+                              const next = event.target.checked
+                                ? [...activeSummary.worldbookIds, book.id]
+                                : activeSummary.worldbookIds.filter(id => id !== book.id)
+                              updateBinding({ worldbookIds: next })
+                            }}
+                          />
+                          <span className={checked ? css.entryToggleOn : css.entryToggleOff}>{book.name}</span>
+                        </label>
+                      )
+                    })}
+                  </fieldset>
+                </div>
+              </details>
               {activeSummary.greetings.length > 1 ? (
                 <select
                   className={css.greetingSelect}
