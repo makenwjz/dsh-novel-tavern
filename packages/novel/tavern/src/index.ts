@@ -1,0 +1,590 @@
+/**
+ * The tavern service: a SillyTavern-compatible roleplay store for the novel
+ * workspace. It imports lorebook (worldbook) JSON exports and character cards
+ * (JSON or PNG with a `chara`/`ccv3` text chunk), validates them loud, mints
+ * stable ids, and feeds a per-session prompt section that injects the
+ * character and the keyword-activated lorebook entries. Sessions bind to the
+ * store through a typed `tavern/binding` session event, so the binding is a
+ * pure replay quantity recovered from the session log on restarts and cold
+ * reads.
+ * @module @deepseek-ai/dsh-tavern
+ */
+
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { randomUUID } from 'node:crypto'
+import { join, resolve } from 'node:path'
+import { Context, Service } from '@deepseek-ai/cordis'
+import z from '@deepseek-ai/schemastery'
+import { BlockAssembler, createUserMessage } from '@deepseek-ai/dsh-llm'
+// Type-only: pulls the `AssembleContext.agent` and `Context.systemPrompt`
+// augmentations into the program.
+import type {} from '@deepseek-ai/dsh-agent'
+import type {} from '@deepseek-ai/dsh-system-prompt'
+import type {} from '@deepseek-ai/dsh-llm'
+import type { SessionId } from '@deepseek-ai/dsh-session'
+import { activateEntries, parseLorebook } from './lorebook.ts'
+import { extractEmbeddedWorldBook, parseCharacterJson, parseCharacterPng, parseCharacterPngRaw } from './character.ts'
+import { foldBinding, recentText, renderTavernSection } from './section.ts'
+import type {
+  ActivatedLore,
+  CardScore,
+  CharacterId,
+  CharacterProfile,
+  CharacterView,
+  DanglingBinding,
+  Lorebook,
+  TavernBindingData,
+  TavernProjectTree,
+  WorldBookId,
+  WorldBookView,
+} from './types.ts'
+
+/** The deployment-facing configuration of the tavern store. */
+export interface TavernConfig {
+  /** Directory holding `worldbooks/` and `characters/`; resolved against the working directory. */
+  root: string
+  /** The character budget of the activation text window scanned per assembly. */
+  activationTextLimit: number
+  /** Cap on the total characters of activated lore injected per assembly.
+   *  Large lorebooks (100+ entries) otherwise blow the prompt budget; entries
+   *  beyond the cap are dropped in insertion order. Defaults to 12000. */
+  activationCharBudget?: number
+  /** Trim the character block to name, description, and first message to cut per-turn tokens. */
+  lean: boolean
+  /** Optional provider route used by the card-quality scoring call. */
+  scoreProvider?: string
+  /** Optional model id paired with `scoreProvider`. */
+  scoreModel?: string
+  /** Output-token cap for the scoring call. */
+  scoreMaxTokens?: number
+}
+
+/** Safe identifier pattern shared by store files and sessions. */
+const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/
+
+/** Mint one store id for a collection. */
+function mintId(prefix: 'worldbook' | 'character'): string {
+  return `${prefix}-${randomUUID()}`
+}
+
+/** Validate an opaque store id, failing loud on anything unsafe or malformed. */
+function validateId(kind: 'worldbook' | 'character', id: string): void {
+  if (!ID_PATTERN.test(id)) {
+    throw new Error(`tavern: invalid ${kind} id ${JSON.stringify(id)}`)
+  }
+}
+
+/** Parse the model's scoring JSON, tolerating prose around the braces. */
+function parseScore(text: string): CardScore {
+  const start = text.indexOf('{')
+  const end = text.lastIndexOf('}')
+  const raw = start >= 0 && end > start ? text.slice(start, end + 1) : ''
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw)
+  } catch {
+    throw new Error('tavern: card scoring returned no parseable JSON')
+  }
+  const score = parsed as Record<string, unknown>
+  const numberField = (key: 'overall' | 'clarity' | 'consistency' | 'tokenEfficiency'): number => {
+    const value = score[key]
+    if (typeof value !== 'number' || !Number.isFinite(value)) {
+      throw new Error(`tavern: card scoring returned an invalid ${JSON.stringify(key)}`)
+    }
+    return value
+  }
+  return {
+    overall: numberField('overall'),
+    clarity: numberField('clarity'),
+    consistency: numberField('consistency'),
+    tokenEfficiency: numberField('tokenEfficiency'),
+    note: typeof score.note === 'string' ? score.note : '',
+  }
+}
+
+/** The stored-file extensions of one collection. */
+const STORE_EXTENSIONS: Record<'worldbooks' | 'characters', string[]> = {
+  worldbooks: ['json'],
+  characters: ['json', 'png'],
+}
+
+declare module '@deepseek-ai/cordis' {
+  interface Context {
+    tavern: TavernService
+  }
+}
+
+declare module '@deepseek-ai/dsh-session/types' {
+  interface SessionEventMap {
+    /**
+     * Latest-wins per-session tavern binding. The model-visible injection is
+     * folded from this event, so the prompt material is reconstructable from
+     * the session log alone; the referenced store files are durable data.
+     */
+    'tavern/binding': TavernBindingData
+  }
+}
+
+/**
+ * The tavern store service, published on `ctx.tavern`. Ids are minted by the
+ * service (`worldbook-<uuid>`, `character-<uuid>`); imports keep their raw
+ * file bytes so a re-export round-trips. Deletes fail loud while any attached
+ * session still binds the referenced store object.
+ */
+export class TavernService extends Service {
+  static Config: z<TavernConfig> = z.object({
+    root: z.string().default('tavern'),
+    activationTextLimit: z.number().step(1).min(1).default(4000),
+    activationCharBudget: z.number().step(1).min(500).default(12000),
+    lean: z.boolean().default(false),
+    scoreProvider: z.string(),
+    scoreModel: z.string(),
+    scoreMaxTokens: z.number().step(1).min(1).default(500),
+  })
+  /** Sibling services the constructor reads while registering the section. */
+  static inject = ['systemPrompt', 'sessions']
+
+  /** The store's root directory (resolved). */
+  readonly root: string
+  /** The resolved activation text window budget. */
+  readonly activationTextLimit: number
+  /** The resolved injected-lore character cap. */
+  readonly activationCharBudget: number
+  /** Whether the prompt section renders the trimmed character block. */
+  private _lean: boolean
+
+  /** Whether the prompt section renders the trimmed character block. */
+  get lean(): boolean {
+    return this._lean
+  }
+
+  /** The optional scoring route and output cap. */
+  private readonly scoreRoute: { readonly provider: string; readonly model: string } | undefined
+  private readonly scoreMaxTokens: number
+
+  /**
+   * Open (or create) the store under `config.root` and register the prompt
+   * section that injects bindings into every session's assembly.
+   * @param ctx - Cordis context that owns the service.
+   * @param config - plugin configuration (schema-validated).
+   */
+  constructor(ctx: Context, config: TavernConfig) {
+    super(ctx, 'tavern')
+    this.root = resolve(config.root)
+    this.activationTextLimit = config.activationTextLimit
+    /* v8 ignore next -- the Config schema default supplies the budget, so this fallback is unreachable */
+    this.activationCharBudget = config.activationCharBudget ?? 12000
+    this._lean = config.lean
+    this.scoreRoute = config.scoreProvider !== undefined && config.scoreModel !== undefined
+      ? { provider: config.scoreProvider, model: config.scoreModel }
+      : undefined
+    /* v8 ignore next -- the Config schema default supplies scoreMaxTokens, so this fallback is unreachable */
+    this.scoreMaxTokens = config.scoreMaxTokens ?? 500
+    mkdirSync(join(this.root, 'worldbooks'), { recursive: true })
+    mkdirSync(join(this.root, 'characters'), { recursive: true })
+    ctx.systemPrompt.section({
+      name: 'tavern:context',
+      order: 40,
+      text: (context) => {
+        if (context.agent === undefined) return ''
+        const session = context.agent.session
+        const binding = foldBinding(session.events)
+        if (binding === null) return ''
+        try {
+          const characters = binding.characterIds !== undefined && binding.characterIds.length > 0
+            ? binding.characterIds.map(id => this.characterProfile(id))
+            : (binding.characterId === null ? [] : [this.characterProfile(binding.characterId)])
+          const activated = this.activatedLore(binding, recentText(session.events, this.activationTextLimit))
+          return renderTavernSection({ binding, characters, activated, lean: this.lean })
+        } catch (error) {
+          // A tampered store must not take down every turn: degrade to an
+          // empty section and let the invariant companion fail the boot.
+          ctx.logger.warn('dsh-tavern: failed to render the tavern context section: %o', error)
+          return ''
+        }
+      },
+    })
+  }
+
+  /**
+   * Toggle the trimmed character block at runtime. The new value applies from
+   * the next prompt assembly onward.
+   * @param lean - whether the prompt section renders the trimmed character block.
+   */
+  setLean(lean: boolean): void {
+    this._lean = lean
+  }
+
+  /**
+   * Import one SillyTavern lorebook export.
+   * @param content - the raw worldbook JSON text.
+   * @returns the stored worldbook row.
+   */
+  importWorldBook(content: string): WorldBookView {
+    const book = parseLorebook(parseJson(content, 'worldbook'))
+    const id = mintId('worldbook') as WorldBookId
+    writeFileSync(join(this.root, 'worldbooks', `${id}.json`), content, 'utf-8')
+    return { id, name: book.name, entryCount: book.entries.length }
+  }
+
+  /**
+   * Every imported worldbook, ordered by name.
+   * @returns the worldbook rows.
+   */
+  listWorldBooks(): WorldBookView[] {
+    return this.scanStore<WorldBookView>('worldbooks', 'json', (file, id) => {
+      const book = parseLorebook(parseJson(readFileSync(file, 'utf-8'), 'worldbook'))
+      return { id: id as WorldBookId, name: book.name, entryCount: book.entries.length }
+    })
+  }
+
+  /**
+   * Delete one worldbook. Sessions whose binding still references the book
+   * block the delete.
+   * @param id - the worldbook id.
+   */
+  deleteWorldBook(id: WorldBookId): void {
+    this.deleteFile('worldbooks', 'worldbook', id)
+  }
+
+  /**
+   * Import one character card.
+   * @param fileName - the original file name; `.png` (any case) selects the
+   * PNG card parser, anything else parses as JSON.
+   * @param data - the raw card bytes.
+   * @returns the stored character row.
+   */
+  importCharacter(fileName: string, data: Uint8Array): CharacterView {
+    const isPng = fileName.toLowerCase().endsWith('.png')
+    const raw = isPng
+      ? parseCharacterPngRaw(data)
+      : parseJson(new TextDecoder().decode(data), 'character')
+    const profile = parseCharacterJson(raw)
+    const embedded = extractEmbeddedWorldBook(raw)
+    if (embedded !== null) {
+      // A card with an embedded worldbook brings its worldbook with it, so the
+      // roleplay binding can activate its entries without a separate import.
+      this.importWorldBook(JSON.stringify({ name: embedded.name, entries: embedded.entries }))
+    }
+    const id = mintId('character') as CharacterId
+    writeFileSync(join(this.root, 'characters', `${id}.${isPng ? 'png' : 'json'}`), data)
+    return { id, name: profile.name, format: isPng ? 'png' : 'json' }
+  }
+
+  /**
+   * Every imported character, ordered by name.
+   * @returns the character rows.
+   */
+  listCharacters(): CharacterView[] {
+    return ['json', 'png']
+      .flatMap(extension => this.scanStore<CharacterView>('characters', extension, (file, id) => {
+        const profile = this.characterFile(file, extension)
+        return { id: id as CharacterId, name: profile.name, format: extension as 'json' | 'png' }
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+  }
+
+  /**
+   * Delete one character card. Sessions whose binding still references the
+   * card block the delete.
+   * @param id - the character id.
+   */
+  deleteCharacter(id: CharacterId): void {
+    this.deleteFile('characters', 'character', id)
+  }
+
+  /**
+   * Load one worldbook.
+   * @param id - the worldbook id.
+   * @returns the parsed lorebook.
+   */
+  worldBook(id: WorldBookId): Lorebook {
+    validateId('worldbook', id)
+    return parseLorebook(parseJson(readFileSync(join(this.root, 'worldbooks', `${id}.json`), 'utf-8'), 'worldbook'))
+  }
+
+  /**
+   * Load one character card.
+   * @param id - the character id.
+   * @returns the projected profile.
+   */
+  characterProfile(id: CharacterId): CharacterProfile {
+    validateId('character', id)
+    const file = this.storeFile('characters', 'character', id)
+    if (file === undefined) throw new Error(`tavern: character ${JSON.stringify(id)} not found`)
+    return this.characterFile(file, file.endsWith('.png') ? 'png' : 'json')
+  }
+
+  /**
+   * The project explorer tree: every worldbook with its entries, and every
+   * character with its raw extension fields and portrait-image availability.
+   * @returns the tree.
+   */
+  projectTree(): TavernProjectTree {
+    const worldbooks = this.listWorldBooks().map((view) => {
+      const book = this.worldBook(view.id)
+      return {
+        id: view.id,
+        name: view.name,
+        entries: book.entries.map(entry => ({
+          name: entry.name,
+          keys: [...entry.keys],
+          content: entry.content,
+          comment: entry.comment,
+          enabled: entry.enabled,
+        })),
+      }
+    })
+    const characters = this.listCharacters().map((view) => {
+      const profile = this.characterProfile(view.id)
+      return {
+        id: view.id,
+        name: view.name,
+        format: view.format,
+        extensions: this.characterExtensions(view.id, view.format),
+        hasAvatar: view.format === 'png',
+        // The card's opening messages: first_mes plus every alternate greeting,
+        // so the chat can preload the scene the way SillyTavern does.
+        greetings: [
+          ...(profile.firstMes.length === 0 ? [] : [profile.firstMes]),
+          ...profile.alternateGreetings,
+        ],
+      }
+    })
+    return { worldbooks, characters }
+  }
+
+  /**
+   * The stored character card's portrait image as base64. PNG cards carry
+   * their portrait as the file itself; JSON cards have no embedded image.
+   * @param id - the character card.
+   * @returns the base64 PNG bytes.
+   */
+  characterImage(id: CharacterId): string {
+    validateId('character', id)
+    const file = this.storeFile('characters', 'character', id)
+    if (file === undefined) throw new Error(`tavern: character ${JSON.stringify(id)} not found`)
+    if (!file.endsWith('.png')) throw new Error(`tavern: character ${JSON.stringify(id)} has no embedded image`)
+    return readFileSync(file).toString('base64')
+  }
+
+  /** The raw `extensions` object of one stored character card. */
+  private characterExtensions(id: CharacterId, format: 'json' | 'png'): Record<string, unknown> {
+    const file = this.storeFile('characters', 'character', id)
+    if (file === undefined) return {}
+    const raw = format === 'png'
+      ? parseCharacterPngRaw(readFileSync(file))
+      : parseJson(new TextDecoder().decode(readFileSync(file)), 'character')
+    if (typeof raw !== 'object' || raw === null) return {}
+    let source = raw as Record<string, unknown>
+    if (typeof source.spec === 'string' && source.data !== null && typeof source.data === 'object' && !Array.isArray(source.data)) {
+      source = source.data as Record<string, unknown>
+    }
+    const extensions = source.extensions
+    return extensions !== null && typeof extensions === 'object' && !Array.isArray(extensions)
+      ? extensions as Record<string, unknown>
+      : {}
+  }
+
+  /**
+   * Model-assess one character card's quality through the LLM service.
+   * @param id - the character card to score.
+   * @param signal - optional caller cancellation.
+   * @returns the structured score, failing loud when no llm service or scoring route exists.
+   */
+  async scoreCharacter(id: CharacterId, signal?: AbortSignal): Promise<CardScore> {
+    if (this.scoreRoute === undefined) {
+      throw new Error('tavern: card scoring requires scoreProvider and scoreModel in the configuration')
+    }
+    const llm = this.ctx.get('llm')
+    if (llm === undefined) {
+      throw new Error('tavern: card scoring requires the llm service')
+    }
+    const profile = this.characterProfile(id)
+    const system = [
+      '你是角色卡质量评审员。根据角色设定的清晰度、内部一致性、token 效率三个维度，',
+      '对下面的角色卡 JSON 评分。返回严格 JSON：',
+      '{"overall":<0-10>,"clarity":<0-10>,"consistency":<0-10>,"tokenEfficiency":<0-10>,"note":"<一句话改进建议>"}',
+    ].join('\n')
+    const messages = [createUserMessage({
+      content: [{ type: 'text', text: JSON.stringify(profile) }],
+      source: { kind: 'plugin', plugin: 'dsh-tavern' },
+    })]
+    const assembler = new BlockAssembler()
+    for await (const chunk of llm.stream({
+      provider: this.scoreRoute.provider,
+      model: this.scoreRoute.model,
+      messages,
+      system,
+      maxTokens: this.scoreMaxTokens,
+      ...(signal === undefined ? {} : { signal }),
+    })) {
+      assembler.push(chunk)
+    }
+    const finish = assembler.finish
+    if (finish !== undefined && (finish.kind === 'error' || finish.kind === 'aborted')) {
+      throw new Error(`tavern: card scoring failed: ${finish.failure.message}`)
+    }
+    const text = assembler.blocks()
+      .filter((block): block is { type: 'text'; text: string } => block.type === 'text')
+      .map(block => block.text)
+      .join('')
+    return parseScore(text)
+  }
+
+  /**
+   * The activated lore of one binding against one text window, capped by the
+   * injected-character budget. Activation scans every enabled entry (constant
+   * entries always fire; the rest need keyword matches, plus secondary keys
+   * when selective); the survivors are sorted by insertion order and the head
+   * of the list is kept until the budget is exhausted — a 100+ entry lorebook
+   * can otherwise inject tens of thousands of tokens into every assembly.
+   * @param binding - the binding to load.
+   * @param text - the text window to activate against.
+   * @returns the activated entries in insertion order, worldbook by worldbook,
+   * truncated to the character budget.
+   */
+  activatedLore(binding: TavernBindingData, text: string): ActivatedLore[] {
+    const stage = binding.stage ?? 0
+    const activated: ActivatedLore[] = []
+    for (const id of binding.worldbookIds) {
+      const book = this.worldBook(id)
+      activated.push(...activateEntries(book.entries, text, binding.disabledEntryNames)
+        .filter(match => match.entry.stage === 0 || match.entry.stage === stage)
+        .map(match => ({
+          bookId: id,
+          bookName: book.name,
+          entry: match.entry,
+          matchedKeys: match.matchedKeys,
+        })))
+    }
+    activated.sort((a, b) => a.entry.insertionOrder - b.entry.insertionOrder)
+    let chars = 0
+    let dropped = 0
+    const kept: ActivatedLore[] = []
+    for (const match of activated) {
+      chars += match.entry.content.length
+      if (chars > this.activationCharBudget && kept.length > 0) {
+        dropped += 1
+        continue
+      }
+      kept.push(match)
+    }
+    if (dropped > 0) {
+      this.ctx.logger.warn(
+        'dsh-tavern: lore injection exceeded the %d-char budget; dropped %d of %d activated entries',
+        this.activationCharBudget, dropped, activated.length,
+      )
+    }
+    return kept
+  }
+
+  /**
+   * Advance one session's lorebook activation stage by one and record the new
+   * binding. Entries on stage zero always stay active; the raised stage moves
+   * the session into the next staged set.
+   * @param sessionId - the attached session to advance.
+   * @returns the new binding.
+   * @throws when the session is unattached or carries no binding.
+   */
+  advanceStage(sessionId: string): TavernBindingData {
+    const session = this.ctx.sessions.get(sessionId as SessionId)
+    if (session === undefined) throw new Error(`tavern: session ${JSON.stringify(sessionId)} is not attached`)
+    const binding = foldBinding(session.events)
+    if (binding === null) throw new Error(`tavern: session ${JSON.stringify(sessionId)} has no binding`)
+    const next: TavernBindingData = { ...binding, stage: (binding.stage ?? 0) + 1 }
+    session.append('tavern/binding', next)
+    return next
+  }
+
+  /**
+   * The binding folded from one attached session's log.
+   * @param sessionId - the session to fold.
+   * @returns the binding, or null when the session is unattached or unbinding.
+   */
+  bindingOf(sessionId: string): TavernBindingData | null {
+    const session = this.ctx.sessions.get(sessionId as SessionId)
+    return session === undefined ? null : foldBinding(session.events)
+  }
+
+  /**
+   * Audit every attached session's binding against the store files.
+   * @returns the dangling references found.
+   */
+  checkBindings(): DanglingBinding[] {
+    const dangling: DanglingBinding[] = []
+    for (const session of this.ctx.sessions.list()) {
+      const binding = foldBinding(session.events)
+      if (binding === null) continue
+      for (const id of binding.worldbookIds) {
+        if (this.storeFile('worldbooks', 'worldbook', id) === undefined) {
+          dangling.push({ sessionId: session.id, kind: 'worldbook', id })
+        }
+      }
+      if (binding.characterId !== null && this.storeFile('characters', 'character', binding.characterId) === undefined) {
+        dangling.push({ sessionId: session.id, kind: 'character', id: binding.characterId })
+      }
+    }
+    return dangling
+  }
+
+  /** Parse one stored character file by its extension. */
+  private characterFile(file: string, extension: string): CharacterProfile {
+    const data = readFileSync(file)
+    return extension === 'png'
+      ? parseCharacterPng(data)
+      : parseCharacterJson(parseJson(new TextDecoder().decode(data), 'character'))
+  }
+
+  /** Scan one store directory, parsing every file of one extension. */
+  private scanStore<T>(directory: 'worldbooks' | 'characters', extension: string, project: (file: string, id: string) => T): T[] {
+    return readdirSync(join(this.root, directory))
+      .filter(name => name.endsWith(`.${extension}`))
+      .map(name => project(join(this.root, directory, name), name.slice(0, -extension.length - 1)))
+  }
+
+  /** The existing store file of one id, or undefined. */
+  private storeFile(directory: 'worldbooks' | 'characters', kind: 'worldbook' | 'character', id: string): string | undefined {
+    validateId(kind, id)
+    return STORE_EXTENSIONS[directory]
+      .map(candidate => join(this.root, directory, `${id}.${candidate}`))
+      .find(existsSync)
+  }
+
+  /** Delete one store file, blocked while any attached session binds it. */
+  private deleteFile(directory: 'worldbooks' | 'characters', kind: 'worldbook' | 'character', id: string): void {
+    validateId(kind, id)
+    const bound = this.boundSessions(kind, id)
+    if (bound.length > 0) {
+      throw new Error(`tavern: ${kind} ${JSON.stringify(id)} is still bound by session(s) ${bound.join(', ')}`)
+    }
+    const file = this.storeFile(directory, kind, id)
+    if (file === undefined) throw new Error(`tavern: ${kind} ${JSON.stringify(id)} not found`)
+    rmSync(file)
+  }
+
+  /** Every attached session whose folded binding references one store id. */
+  private boundSessions(kind: 'worldbook' | 'character', id: string): string[] {
+    const sessions: string[] = []
+    for (const session of this.ctx.sessions.list()) {
+      const binding = foldBinding(session.events)
+      if (binding === null) continue
+      const references = kind === 'worldbook'
+        ? binding.worldbookIds.includes(id as WorldBookId)
+        : binding.characterId === (id as CharacterId)
+      if (references) sessions.push(session.id)
+    }
+    return sessions
+  }
+}
+
+/** Parse one JSON import with a boundary-naming error. */
+function parseJson(content: string, kind: 'worldbook' | 'character'): unknown {
+  try {
+    return JSON.parse(content)
+  } catch (error) {
+    throw new Error(`tavern: ${kind} content is not valid JSON`, { cause: error })
+  }
+}
+
+export default TavernService

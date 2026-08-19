@@ -1,0 +1,560 @@
+/* Genshin-inspired content styling shared by the novel workspace tab and the
+   tavern panel: deep navy plates with gold trim, serif display headings with
+   gold accent bars, and ornamental corner flourishes on cards. */
+
+.section {
+  --gi-ink: #0d1524;
+  --gi-ink-1: #121d31;
+  --gi-ink-2: #192742;
+  --gi-ink-3: #21304e;
+  --gi-gold: #c9a25e;
+  --gi-gold-bright: #e7c98c;
+  --gi-gold-soft: rgba(201, 162, 94, 0.32);
+  --gi-gold-faint: rgba(201, 162, 94, 0.13);
+  --gi-cream: #efe7d4;
+  --gi-cream-2: #c9bda2;
+  --gi-cream-3: #9a8f76;
+  --gi-line: rgba(201, 162, 94, 0.30);
+  --gi-line-strong: rgba(201, 162, 94, 0.58);
+  --gi-display: Georgia, 'Times New Roman', 'Songti SC', 'Noto Serif SC', 'SimSun', serif;
+
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  width: 100%;
+  max-width: 760px;
+  color: var(--gi-cream);
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.toolbar button,
+.failure button {
+  flex: none;
+  border: 1px solid var(--gi-line-strong);
+  border-radius: 6px;
+  padding: 4px 12px;
+  background: linear-gradient(180deg, rgba(201, 162, 94, 0.10), rgba(201, 162, 94, 0.03));
+  color: var(--gi-cream);
+  font: inherit;
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease, color 120ms ease;
+}
+
+.toolbar button:hover,
+.failure button:hover {
+  border-color: var(--gi-gold-bright);
+  background: rgba(201, 162, 94, 0.16);
+  color: var(--gi-gold-bright);
+}
+
+.toolbar button:focus-visible,
+.failure button:focus-visible {
+  outline: 2px solid var(--gi-gold);
+  outline-offset: 2px;
+}
+
+.root {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--gi-cream-3);
+}
+
+.root code {
+  min-width: 0;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  color: var(--gi-gold);
+  font-family: var(--ds-font-family-code);
+}
+
+.block {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0 2px;
+}
+
+.blockHeading {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+  font-family: var(--gi-display);
+  font-size: 14px;
+  line-height: 22px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: var(--gi-gold-bright);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.4);
+}
+
+.blockHeading::before {
+  content: '';
+  flex: none;
+  align-self: center;
+  width: 4px;
+  height: 14px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, var(--gi-gold-bright), var(--gi-gold));
+}
+
+.blockHeading span {
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--gi-cream-3);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+.status,
+.failure p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--gi-cream-3);
+}
+
+.failure {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #e08a6d;
+}
+
+.subjectGrid,
+.cardList,
+.timeline {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.subjectGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 10px;
+}
+
+.subjectCard,
+.card,
+.chapter {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--gi-line-strong);
+  border-radius: 10px;
+  background:
+    radial-gradient(140% 90% at 100% 0%, rgba(201, 162, 94, 0.10), transparent 60%),
+    linear-gradient(180deg, var(--gi-ink-2), rgba(13, 21, 36, 0.9));
+  box-shadow: 0 2px 10px rgba(4, 8, 16, 0.35);
+}
+
+/* Ornamental gold corner flourishes on every plate. */
+.subjectCard::before,
+.card::before,
+.chapter::before {
+  content: '';
+  position: absolute;
+  top: -1px;
+  left: -1px;
+  width: 16px;
+  height: 16px;
+  border-top: 2px solid var(--gi-gold-bright);
+  border-left: 2px solid var(--gi-gold-bright);
+  border-top-left-radius: 9px;
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+.subjectCard::after,
+.card::after,
+.chapter::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  right: -1px;
+  width: 16px;
+  height: 16px;
+  border-bottom: 2px solid var(--gi-gold-bright);
+  border-right: 2px solid var(--gi-gold-bright);
+  border-bottom-right-radius: 9px;
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+.subjectCard {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 13px 15px;
+}
+
+.subjectHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.kindTag {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  min-height: 20px;
+  border: 1px solid var(--gi-line);
+  border-radius: 5px;
+  padding: 1px 7px;
+  background: rgba(201, 162, 94, 0.10);
+  color: var(--gi-cream-2);
+  font-size: 11px;
+  line-height: 16px;
+  white-space: nowrap;
+}
+
+.kindTag[data-kind='character'] {
+  border-color: rgba(201, 162, 94, 0.5);
+  background: rgba(201, 162, 94, 0.16);
+  color: var(--gi-gold-bright);
+}
+
+.subjectName {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--gi-cream);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.subjectSummary,
+.vowPromise,
+.rationale,
+.timelineBody p,
+.transitions p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--gi-cream-2);
+  overflow-wrap: anywhere;
+}
+
+.muted {
+  font-size: 11px;
+  line-height: 17px;
+  color: var(--gi-cream-3);
+}
+
+.fieldList {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.fieldChip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  border: 1px solid var(--gi-line);
+  border-radius: 6px;
+  padding: 2px 7px;
+  background: rgba(13, 21, 36, 0.6);
+  font-size: 11px;
+  line-height: 17px;
+  color: var(--gi-cream-2);
+}
+
+.fieldChip strong {
+  font-weight: 600;
+  color: var(--gi-gold);
+}
+
+.timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.timelineItem {
+  display: grid;
+  grid-template-columns: 78px minmax(0, 1fr);
+  gap: 10px;
+  align-items: baseline;
+}
+
+.timelineBody strong {
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--gi-cream);
+}
+
+.timelineBody p {
+  margin-top: 2px;
+}
+
+.time {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--gi-gold);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.cardList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.characterPicker {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 12px 15px;
+}
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.cardHeader label {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.cardTitle {
+  min-width: 0;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--gi-cream);
+  overflow-wrap: anywhere;
+}
+
+.statusChip {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  min-height: 20px;
+  border: 1px solid var(--gi-line);
+  border-radius: 5px;
+  padding: 1px 7px;
+  background: rgba(13, 21, 36, 0.6);
+  color: var(--gi-cream-2);
+  font-size: 11px;
+  line-height: 16px;
+  white-space: nowrap;
+}
+
+.statusChip[data-status='planted'],
+.statusChip[data-status='open'] {
+  border-color: rgba(201, 162, 94, 0.5);
+  background: rgba(201, 162, 94, 0.14);
+  color: var(--gi-gold-bright);
+}
+
+.statusChip[data-status='advanced'] {
+  border-color: rgba(231, 178, 108, 0.5);
+  background: rgba(231, 178, 108, 0.12);
+  color: #e7b26c;
+}
+
+.statusChip[data-status='paid_off'],
+.statusChip[data-status='decided'] {
+  border-color: rgba(138, 196, 150, 0.5);
+  background: rgba(138, 196, 150, 0.12);
+  color: #8ac496;
+}
+
+.statusChip[data-status='abandoned'] {
+  border-color: rgba(224, 138, 109, 0.5);
+  background: rgba(224, 138, 109, 0.12);
+  color: #e08a6d;
+}
+
+.details {
+  display: grid;
+  grid-template-columns: 78px minmax(0, 1fr);
+  gap: 4px 10px;
+  margin: 0;
+}
+
+.details div {
+  display: contents;
+}
+
+.details dt {
+  color: var(--gi-cream-3);
+  font-size: 11px;
+  line-height: 17px;
+}
+
+.details dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--gi-cream-2);
+  font-size: 12px;
+  line-height: 17px;
+}
+
+.transitions {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 2px 0 0;
+  padding: 8px 10px;
+  border: 1px solid var(--gi-line);
+  border-radius: 8px;
+  background: rgba(13, 21, 36, 0.5);
+  list-style: none;
+}
+
+.transitions li {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr);
+  gap: 10px;
+  align-items: baseline;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--gi-cream-2);
+}
+
+.transitions p {
+  grid-column: 2;
+}
+
+.optionList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.option {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border: 1px solid var(--gi-line);
+  border-radius: 8px;
+  padding: 8px 11px;
+  background: rgba(13, 21, 36, 0.55);
+}
+
+.option[data-chosen='true'] {
+  border-color: rgba(138, 196, 150, 0.6);
+}
+
+.optionHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.optionHeading strong {
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--gi-cream);
+}
+
+.chosenTag {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  min-height: 20px;
+  border: 1px solid rgba(138, 196, 150, 0.5);
+  border-radius: 5px;
+  padding: 1px 7px;
+  background: rgba(138, 196, 150, 0.12);
+  color: #8ac496;
+  font-size: 11px;
+  line-height: 16px;
+  white-space: nowrap;
+}
+
+.rationale {
+  padding: 8px 11px;
+  border-left: 2px solid var(--gi-gold);
+  background: rgba(201, 162, 94, 0.05);
+}
+
+.chapter {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 15px;
+}
+
+/* Tavern panel form controls: gold-bordered inputs and selects. */
+.section textarea,
+.section select,
+.section input[type='file'] {
+  border: 1px solid var(--gi-line-strong);
+  border-radius: 6px;
+  background: rgba(13, 21, 36, 0.6);
+  color: var(--gi-cream);
+  font: inherit;
+}
+
+.section textarea {
+  width: 100%;
+  min-height: 64px;
+  padding: 8px 10px;
+  box-sizing: border-box;
+  resize: vertical;
+}
+
+.section textarea:focus,
+.section select:focus,
+.section input[type='file']:focus {
+  outline: 2px solid var(--gi-gold);
+  outline-offset: 1px;
+}
+
+@media (max-width: 680px) {
+  .subjectGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .timelineItem,
+  .transitions li {
+    grid-template-columns: 66px minmax(0, 1fr);
+  }
+}

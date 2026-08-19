@@ -1,0 +1,14 @@
+# The pwsh terminal-card lane rides the SHIPPED tree on Windows: the base/web
+# bundles gate bash and pwsh stacks by platform (`bash-sandbox`/`tool-bash`
+# carry `disabled: !!js process.platform === 'win32'`; their twins mount on
+# win32 only), so no overlay insertion is needed and inserting one would
+# duplicate the bundle's disabled rows. The permission service refuses an
+# unconfined executor by design (presets bundle a sandbox mode), so its row is
+# disabled too — this lane renders a seeded session, never a permission
+# decision. POSIX hosts ship no pwsh executor, so the lane skips there; the
+# seeded scenario renders the logged pwsh call/result through the real tools
+# on replay, and the composition must boot the pwsh executor, so the lane also
+# skips on hosts without a usable `pwsh`.
+- id: permission
+  name: '@deepseek-ai/dsh-permission-presets'
+  disabled: true

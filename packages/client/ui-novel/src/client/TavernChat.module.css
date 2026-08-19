@@ -1,0 +1,462 @@
+/* WeChat-style tavern chat: a left session list and a right bubble
+   conversation. Keeps the Genshin navy/gold palette of the explorer while
+   borrowing chat-app layout conventions (avatars, bubbles, bottom input bar). */
+
+.chat {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+}
+
+/* ── left session list ──────────────────────────────────────────────────── */
+
+.list {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-right: 1px solid var(--gi-line);
+  background: rgba(13, 21, 36, 0.55);
+}
+
+.newChat {
+  flex: none;
+  margin: 12px;
+  padding: 9px 12px;
+  border: 1px solid var(--gi-line-strong);
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(201, 162, 94, 0.16), rgba(201, 162, 94, 0.05));
+  color: var(--gi-gold-bright);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.newChat:hover {
+  border-color: var(--gi-gold-bright);
+  background: rgba(201, 162, 94, 0.26);
+}
+
+.newChatMark {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.listEmpty {
+  margin: 14px;
+  color: var(--gi-cream-3);
+  font-size: 12px;
+}
+
+.listRows {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0 8px 12px;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.listItem {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.listRow {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  box-sizing: border-box;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--gi-cream);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.listDelete {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  margin-right: 4px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--gi-cream-3);
+  font-size: 11px;
+  cursor: pointer;
+  opacity: 0;
+}
+
+.listItem:hover .listDelete {
+  opacity: 1;
+}
+
+.listDelete:hover {
+  background: rgba(224, 138, 109, 0.2);
+  color: #e08a6d;
+}
+
+.listRow:hover {
+  background: rgba(201, 162, 94, 0.08);
+}
+
+.listRowActive {
+  background: linear-gradient(180deg, rgba(201, 162, 94, 0.16), rgba(201, 162, 94, 0.06));
+}
+
+.listAvatar {
+  flex: none;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 1px solid var(--gi-line-strong);
+  object-fit: cover;
+  background: rgba(17, 28, 48, 0.9);
+}
+
+.listAvatarFallback {
+  flex: none;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 1px solid var(--gi-line-strong);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(180deg, #24345a, #16233c);
+  color: var(--gi-gold-bright);
+  font-size: 18px;
+}
+
+.listMeta {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.listName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--gi-cream);
+}
+
+.listLast {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--gi-cream-3);
+}
+
+/* ── right conversation pane ────────────────────────────────────────────── */
+
+.pane {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background:
+    radial-gradient(100% 60% at 100% 0%, rgba(201, 162, 94, 0.05), transparent 50%),
+    rgba(10, 17, 32, 0.35);
+}
+
+.emptyPane {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 24px;
+}
+
+.emptyPane .newChat {
+  margin: 0;
+}
+
+.emptyTitle {
+  margin: 0;
+  color: var(--gi-cream-3);
+  font-size: 14px;
+}
+
+.paneHeader {
+  flex: none;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--gi-line);
+}
+
+.paneName {
+  font-size: 16px;
+  color: var(--gi-gold-bright);
+}
+
+.paneHeaderSpacer {
+  flex: 1;
+}
+
+.greetingSelect {
+  flex: none;
+  padding: 4px 10px;
+  border: 1px solid var(--gi-line);
+  border-radius: 12px;
+  background: rgba(13, 21, 36, 0.7);
+  color: var(--gi-cream-2);
+  font: inherit;
+  font-size: 12px;
+}
+
+/* The card's own HTML rendering, sandboxed (no scripts, no same-origin).
+   Height is driven by the content via the bridge (auto) or the drag handle. */
+.richWrap {
+  position: relative;
+  width: 100%;
+}
+
+.richFrame {
+  display: block;
+  width: 100%;
+  height: 440px;
+  border: 1px solid var(--gi-line);
+  border-radius: 8px;
+  background: #fff;
+  box-sizing: border-box;
+}
+
+.resizeHandle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 12px;
+  margin-top: 2px;
+  border-radius: 4px;
+  color: var(--gi-cream-3);
+  font-size: 10px;
+  letter-spacing: 3px;
+  cursor: ns-resize;
+  user-select: none;
+}
+
+.resizeHandle::after {
+  content: '⋮⋮';
+}
+
+.resizeHandle:hover {
+  color: var(--gi-gold-bright);
+  background: rgba(201, 162, 94, 0.10);
+}
+
+/* Rendered (HTML) messages get a wide bubble instead of the 68% text bubble. */
+.richBubble {
+  max-width: 96%;
+  width: 96%;
+}
+
+.unbindButton {
+  flex: none;
+  padding: 5px 12px;
+  border: 1px solid rgba(224, 138, 109, 0.6);
+  border-radius: 12px;
+  background: rgba(224, 138, 109, 0.12);
+  color: #e08a6d;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.unbindButton:hover:not(:disabled) {
+  border-color: #e08a6d;
+  background: rgba(224, 138, 109, 0.24);
+}
+
+.unbindButton:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.paneHint {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--gi-cream-3);
+  font-size: 11px;
+}
+
+.chatError {
+  margin: 8px 18px 0;
+  color: #e08a6d;
+  font-size: 12px;
+}
+
+.chatNotice {
+  margin: 8px 18px 0;
+  color: #9fd08a;
+  font-size: 12px;
+}
+
+.messages {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.noMessages {
+  margin: auto;
+  color: var(--gi-cream-3);
+  font-size: 13px;
+}
+
+.daySep {
+  margin: 4px 0;
+  text-align: center;
+  color: var(--gi-cream-3);
+  font-size: 11px;
+}
+
+.bubbleRow {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.bubbleRowMine {
+  flex-direction: row-reverse;
+}
+
+.avatar {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid var(--gi-line-strong);
+  object-fit: cover;
+  background: rgba(17, 28, 48, 0.9);
+}
+
+.avatarFallback {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid var(--gi-line-strong);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(180deg, #24345a, #16233c);
+  color: var(--gi-gold-bright);
+  font-size: 16px;
+}
+
+.bubble {
+  max-width: 68%;
+  padding: 9px 12px;
+  border: 1px solid var(--gi-line);
+  border-radius: 4px 12px 12px 12px;
+  background: linear-gradient(180deg, rgba(26, 41, 66, 0.9), rgba(17, 28, 48, 0.9));
+  box-shadow: 0 2px 8px rgba(4, 8, 16, 0.35);
+}
+
+.bubbleMine {
+  border-radius: 12px 4px 12px 12px;
+  background: linear-gradient(180deg, rgba(201, 162, 94, 0.22), rgba(201, 162, 94, 0.10));
+}
+
+.bubbleText {
+  margin: 0;
+  color: var(--gi-cream);
+  font-size: 13px;
+  line-height: 20px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.bubbleTime {
+  display: block;
+  margin-top: 4px;
+  color: var(--gi-cream-3);
+  font-size: 10px;
+  text-align: right;
+}
+
+.sendingHint {
+  margin: 0;
+  color: var(--gi-cream-3);
+  font-size: 12px;
+}
+
+/* ── bottom input bar ───────────────────────────────────────────────────── */
+
+.inputBar {
+  flex: none;
+  display: flex;
+  gap: 8px;
+  padding: 12px 18px;
+  border-top: 1px solid var(--gi-line);
+  background: rgba(13, 21, 36, 0.6);
+}
+
+.input {
+  flex: 1;
+  min-width: 0;
+  padding: 9px 12px;
+  border: 1px solid var(--gi-line-strong);
+  border-radius: 18px;
+  background: rgba(17, 28, 48, 0.8);
+  color: var(--gi-cream);
+  font: inherit;
+  font-size: 13px;
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--gi-gold-bright);
+}
+
+.sendButton {
+  flex: none;
+  padding: 9px 18px;
+  border: 1px solid var(--gi-line-strong);
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(201, 162, 94, 0.18), rgba(201, 162, 94, 0.06));
+  color: var(--gi-gold-bright);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.sendButton:hover:not(:disabled) {
+  border-color: var(--gi-gold-bright);
+  background: rgba(201, 162, 94, 0.26);
+}
+
+.sendButton:disabled {
+  opacity: 0.45;
+  cursor: default;
+}

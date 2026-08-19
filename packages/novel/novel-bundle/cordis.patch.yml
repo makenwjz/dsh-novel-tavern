@@ -1,0 +1,28 @@
+# The dsh-novel-bundle patch: the long-fiction writing capability as one
+# installable layer. It mounts the durable novel workspace service, the
+# model-facing novel tools, and the tavern roleplay store together; a profile
+# that wants only the tools (for example to compose them behind one agent
+# preset) mounts the tool package directly instead.
+#
+# The service row owns the store contract: `root` is the directory holding
+# the SQLite store and Markdown exports, resolved against the process working
+# directory with a `novel` default. The tools row registers the twelve
+# model-facing tools over ctx.novel; novel_lint additionally works without
+# the service (pure text analysis), so the service row may be overridden off
+# in a later patch layer without breaking that tool.
+#
+# The tavern row mounts the SillyTavern-compatible roleplay store on the same
+# process root: one store (`worldbooks/` + `characters/` under its own
+# directory), one per-session prompt section. It provides no model-facing
+# tools; sessions bind through the browser's tavern domain, and the injected
+# section covers every session with a binding.
+
+- insert:
+    - id: novel
+      name: '@deepseek-ai/dsh-novel'
+
+    - id: novel-tools
+      name: '@deepseek-ai/dsh-novel-tools'
+
+    - id: tavern
+      name: '@deepseek-ai/dsh-tavern'
