@@ -81,9 +81,10 @@ describe('ui-novel browser plugin', () => {
     declare(b.slots)
     await b.ctx.plugin({ inject: [...inject], apply }).await()
 
-    // The plugin still registers all four overlay surfaces (both seals + both explorers).
+    // The plugin still registers all five overlay surfaces (both seals + both
+    // explorers + the tavern chat).
     const overlays = b.slots.entries('shell.overlay')
-    expect(overlays).toHaveLength(4)
+    expect(overlays).toHaveLength(5)
     // The tavern explorer injects a read that fails with a clear explanation,
     // but the tavern surface itself is present.
     const tavernStudio = overlays[3]!
@@ -98,15 +99,17 @@ describe('ui-novel browser plugin', () => {
     await b.ctx.plugin({ inject: [...inject], apply }).await()
 
     const overlays = b.slots.entries('shell.overlay')
-    expect(overlays).toHaveLength(4)
+    expect(overlays).toHaveLength(5)
     const novelSeal = overlays[0]!
     const novelStudio = overlays[1]!
     const tavernSeal = overlays[2]!
     const tavernStudio = overlays[3]!
+    const tavernChat = overlays[4]!
     expect(novelSeal.component).toBe(NovelFloatButton)
     expect(novelStudio.component).toBe(NovelProjectExplorer)
     expect(tavernSeal.component).toBe(NovelFloatButton)
     expect(tavernStudio.component).toBe(NovelProjectExplorer)
+    expect(tavernChat.options?.id).toBe('tavern-chat')
     expect(resolveSlotLabel(novelSeal.options.label)).toBe('小说工作区')
     expect(resolveSlotLabel(tavernSeal.options.label)).toBe('酒馆')
     // Each seal shares its store with its own surface, and the two surfaces
@@ -133,7 +136,7 @@ describe('ui-novel browser plugin', () => {
 
     const stop = declare(b.slots)
     await vi.waitFor(() => { expect(b.slots.entries('settings.plugins.tab')).toHaveLength(1) })
-    await vi.waitFor(() => { expect(b.slots.entries('shell.overlay')).toHaveLength(4) })
+    await vi.waitFor(() => { expect(b.slots.entries('shell.overlay')).toHaveLength(5) })
     b.locale.setLocale('en')
     expect(resolveSlotLabel(b.slots.entries('settings.plugins.tab')[0]!.options.label)).toBe('Novel workspace')
     expect(resolveSlotLabel(b.slots.entries('shell.overlay')[0]!.options.label)).toBe('Novel workspace')

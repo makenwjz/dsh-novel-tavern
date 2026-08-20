@@ -1079,6 +1079,9 @@ export function TavernChat({ api, t, useSessions, onNeedLibrary, focusSession }:
               <strong className={css.paneName}>{activeSummary.characterName}</strong>
               <span className={css.paneHint}>{activeSummary.title}</span>
               <span className={css.paneHeaderSpacer} />
+              <button type="button" className={css.libraryButton} onClick={() => onNeedLibrary?.()}>
+                {t('libraryView')}
+              </button>
               <details className={css.resourcePopover}>
                 <summary className={css.resourceSummary}>{t('resourceSettings')}</summary>
                 <div className={css.resourcePanel}>

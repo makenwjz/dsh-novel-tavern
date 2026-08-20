@@ -15,7 +15,7 @@ import type { InjectFace, PropsLocale, PropsRuntime, PropsStore } from '@deepsee
 import type { CharacterId, TavernBindingData, WorldBookId } from '@deepseek-ai/dsh-tavern/types'
 import type { NovelWorkspaceTabInjected } from './NovelWorkspaceContent.tsx'
 import type { FloatingSurfaceStore } from './explorer-store.ts'
-import { TavernChat, cardScripts } from './TavernChat.tsx'
+import { cardScripts } from './TavernChat.tsx'
 import css from './NovelProjectExplorer.module.css'
 
 /** The injected explorer face: the novel read, the tavern API, and the surface mode. */
@@ -144,8 +144,6 @@ export function NovelProjectExplorer({ useStore, actions, read, api, useSessions
   const [error, setError] = useState('')
   const [avatar, setAvatar] = useState<Record<string, string>>({})
   const [reloadKey, setReloadKey] = useState(0)
-  // Tavern mode starts on the WeChat-style chat; the library stays one tab away.
-  const [tavernView, setTavernView] = useState<'chat' | 'library'>('chat')
 
   // Tavern roleplay binding controls (tavern mode only).
   const sessions = useSessions(state => state)
@@ -165,8 +163,6 @@ export function NovelProjectExplorer({ useStore, actions, read, api, useSessions
   const [busy, setBusy] = useState(false)
   /** The active leftmost rail section in the three-column library. */
   const [rail, setRail] = useState<'characters' | 'worldbooks' | 'scripts' | 'presets' | 'settings'>('characters')
-  // Session to open in the chat view when a blocked delete jumps there.
-  const [focusSession, setFocusSession] = useState('')
 
   useEffect(() => {
     if (!open) return
@@ -246,21 +242,27 @@ export function NovelProjectExplorer({ useStore, actions, read, api, useSessions
     })
   }
 
-  /** Start a tavern chat with one character and its related worldbooks. */
+  /** Start a tavern chat with one character and its related worldbooks: bind,
+   *  write the opening greeting into the session, then open the chat surface. */
   const startChatWithCharacter = (character: TavernCharacterRow): void => {
     if (busy || sessionId === '') {
       setNotice({ kind: 'error', text: t('chooseSession') })
       return
     }
     const books = relatedWorldbooks(character)
+    const greeting = character.greetings[0] ?? ''
     runRoleplay(() => api.tavern.startRoleplay({
       sessionId: sessionId as never,
       characterIds: [character.id] as never,
       worldbookIds: books.map(book => book.id) as never,
     }).then((result) => {
       if (!result.result.ok) throw new Error(result.result.error.message)
-      setTavernView('chat')
-      setFocusSession(sessionId)
+      if (greeting.length === 0) return
+      return api.tavern.setGreeting({ sessionId: sessionId as never, greeting }).then((greetingResult) => {
+        if (!greetingResult.result.ok) throw new Error(greetingResult.result.error.message)
+      })
+    }).then(() => {
+      actions.openView('chat')
     }))
   }
 
@@ -1234,21 +1236,13 @@ export function NovelProjectExplorer({ useStore, actions, read, api, useSessions
   return (
     <div className={mode === 'tavern' ? `${css.explorer} ${css.tavernAccent}` : css.explorer} role="dialog" aria-label={t(mode === 'tavern' ? 'tavernTab' : 'tab')}>
       <header className={css.header}>
-        <h2 className={css.title}>{t(mode === 'tavern' ? 'tavernTab' : 'tab')}</h2>
+        <h2 className={css.title}>{t(mode === 'tavern' ? 'libraryView' : 'tab')}</h2>
         {mode === 'tavern' ? (
           <nav className={css.headerTabs} aria-label={t('tavernTab')}>
-            <button
-              type="button"
-              className={tavernView === 'chat' ? `${css.headerTab} ${css.headerTabActive}` : css.headerTab}
-              onClick={() => setTavernView('chat')}
-            >
+            <button type="button" className={`${css.headerTab} ${css.headerTabActive}`} onClick={() => actions.openView('chat')}>
               {t('chatView')}
             </button>
-            <button
-              type="button"
-              className={tavernView === 'library' ? `${css.headerTab} ${css.headerTabActive}` : css.headerTab}
-              onClick={() => setTavernView('library')}
-            >
+            <button type="button" className={css.headerTab} onClick={() => actions.toggle()}>
               {t('libraryView')}
             </button>
           </nav>
@@ -1264,8 +1258,7 @@ export function NovelProjectExplorer({ useStore, actions, read, api, useSessions
               type="button"
               className={css.noticeAction}
               onClick={() => {
-                setFocusSession(notice.boundSessionIds![0] ?? '')
-                setTavernView('chat')
+                actions.openView('chat')
               }}
             >
               {t('goUnbind')}
@@ -1273,9 +1266,7 @@ export function NovelProjectExplorer({ useStore, actions, read, api, useSessions
           ) : null}
         </div>
       )}
-      {mode === 'tavern' && tavernView === 'chat' ? (
-        <TavernChat api={api} t={t} useSessions={useSessions} onNeedLibrary={() => setTavernView('library')} focusSession={focusSession} />
-      ) : mode === 'novel' ? (
+      {mode === 'novel' ? (
         <div className={css.body}>
           <nav className={css.tree} aria-label={t('explorerTree')}>
             <button type="button" className={css.treeGroupTitle} onClick={() => setSelection({ type: 'novel', section: '' })}>

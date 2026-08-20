@@ -27,7 +27,8 @@ type DragState = {
   dragging: boolean
 }
 
-/** Render the draggable floating seal that opens one project surface. */
+/** Render the draggable floating seal that opens one project surface. The
+ *  tavern seal always opens the LIBRARY (the chat opens from a card pick). */
 export function NovelFloatButton({ useStore, actions, t, mode }: NovelFloatButtonProps): ReactNode {
   const tavern = mode === 'tavern'
   const x = useStore(state => state.x)
@@ -50,7 +51,9 @@ export function NovelFloatButton({ useStore, actions, t, mode }: NovelFloatButto
       window.removeEventListener('pointerup', up)
       const wasDrag = dragRef.current?.dragging === true
       dragRef.current = null
-      if (!wasDrag) actions.toggle()
+      if (wasDrag) return
+      if (tavern) actions.openView('library')
+      else actions.toggle()
     }
     window.addEventListener('pointermove', move)
     window.addEventListener('pointerup', up)

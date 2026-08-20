@@ -109,18 +109,13 @@ function renderTavern(
     mode: 'tavern',
     read: vi.fn(),
     api: fullApi as never,
-    useStore: (selector: (state: { open: boolean; x: number; y: number }) => unknown) =>
-      selector({ open: true, x: 0, y: 0 }),
-    actions: { toggle: vi.fn() },
+    useStore: (selector: (state: { open: boolean; x: number; y: number; view: string }) => unknown) =>
+      selector({ open: true, x: 0, y: 0, view: 'library' }),
+    actions: { toggle: vi.fn(), openView: vi.fn() },
     useSessions: () => sessions,
   } as unknown as NovelProjectExplorerProps
   render(<NovelProjectExplorer {...props} />)
   return props
-}
-
-/** Switch the tavern surface from the default chat view to the library tab. */
-async function openLibrary(): Promise<void> {
-  fireEvent.click(await screen.findByRole('button', { name: 'Library' }))
 }
 
 describe('tavern explorer surface', () => {
@@ -128,7 +123,6 @@ describe('tavern explorer surface', () => {
     const api = tavernApi()
     renderTavern(api)
 
-    await openLibrary()
 
     // The characters rail is the default: 阿雅 appears as a card.
     await waitFor(() => { expect(screen.getByText('阿雅')).toBeTruthy() })
@@ -140,7 +134,7 @@ describe('tavern explorer surface', () => {
     expect(await screen.findByLabelText('Choose a character card file')).toBeTruthy()
     expect(await screen.findByLabelText('Choose a worldbook file')).toBeTruthy()
     // One call from the chat view's card load + one from the library tree.
-    expect(api.projectTree).toHaveBeenCalledTimes(2)
+    expect(api.projectTree).toHaveBeenCalledTimes(1)
   })
 
   it('imports a worldbook pasted as JSON and reports success', async () => {
@@ -148,7 +142,6 @@ describe('tavern explorer surface', () => {
     api.importWorldBook.mockResolvedValue(ok({ worldbook: { id: 'worldbook-2', name: '新世界书', entryCount: 2 } }))
     renderTavern(api)
 
-    await openLibrary()
     fireEvent.click(await screen.findByTitle('User settings'))
 
     const paste = await screen.findByLabelText('Or paste worldbook JSON')
@@ -160,7 +153,7 @@ describe('tavern explorer surface', () => {
     })
     await waitFor(() => { expect(screen.getByText('Worldbook imported: 新世界书')).toBeTruthy() })
     // The tree reloads after the mutation (plus the chat view's initial load).
-    await waitFor(() => { expect(api.projectTree).toHaveBeenCalledTimes(3) })
+    await waitFor(() => { expect(api.projectTree).toHaveBeenCalledTimes(2) })
   })
 
   it('surfaces a friendly explanation when a PNG card carries no chara chunk', async () => {
@@ -168,7 +161,6 @@ describe('tavern explorer surface', () => {
     api.importCharacter.mockResolvedValue(fail('tavern: PNG character card carries no chara or ccv3 text chunk'))
     renderTavern(api)
 
-    await openLibrary()
     fireEvent.click(await screen.findByTitle('User settings'))
 
     const input = await screen.findByLabelText('Choose a character card file')
@@ -185,7 +177,6 @@ describe('tavern explorer surface', () => {
     api.deleteWorldBook.mockResolvedValue(ok({}))
     renderTavern(api)
 
-    await openLibrary()
     fireEvent.click(await screen.findByTitle('World books'))
     fireEvent.click(await screen.findByText('剑冢设定'))
     const deleteButton = await screen.findByText('Delete this worldbook')
@@ -195,7 +186,7 @@ describe('tavern explorer surface', () => {
       expect(api.deleteWorldBook).toHaveBeenCalledWith({ id: 'worldbook-1' })
     })
     await waitFor(() => { expect(screen.getByText('Worldbook deleted: 剑冢设定')).toBeTruthy() })
-    await waitFor(() => { expect(api.projectTree).toHaveBeenCalledTimes(3) })
+    await waitFor(() => { expect(api.projectTree).toHaveBeenCalledTimes(2) })
   })
 
   it('lists a character card\u2019s scripts (regex + helper) in its detail', async () => {
@@ -224,7 +215,6 @@ describe('tavern explorer surface', () => {
     }))
     renderTavern(api)
 
-    await openLibrary()
     fireEvent.click(await screen.findByText('阿雅'))
 
     // Two regex scripts + one helper, two enabled in total.
@@ -237,11 +227,10 @@ describe('tavern explorer surface', () => {
   it('names the bound session when a delete is blocked by a live binding', async () => {
     const api = tavernApi()
     api.deleteWorldBook.mockResolvedValue(fail('tavern: worldbook "worldbook-1" is still bound by session(s) session-abc'))
-    renderTavern(api, {
+    const props = renderTavern(api, {
       sessions: { ids: ['session-abc'], byId: { 'session-abc': { title: '测试会话' } } },
     })
 
-    await openLibrary()
     fireEvent.click(await screen.findByTitle('World books'))
     fireEvent.click(await screen.findByText('剑冢设定'))
     fireEvent.click(await screen.findByText('Delete this worldbook'))
@@ -250,10 +239,10 @@ describe('tavern explorer surface', () => {
     expect(message.textContent).toContain('测试会话')
     expect(message.textContent).toContain('Unbind')
 
-    // The notice offers a jump into the chat view to unbind the session.
+    // The notice offers a jump into the chat surface to unbind the session.
     fireEvent.click(await screen.findByRole('button', { name: 'Unbind it in chat' }))
-    // The chat view opens (start-new-chat button becomes visible again).
-    expect(await screen.findByRole('button', { name: 'Start new chat' })).toBeTruthy()
+    // The explorer hands off to the chat surface (the store view flips to 'chat').
+    expect(props.actions.openView).toHaveBeenCalledWith('chat')
   })
 
   it('unbinds a session with an empty binding so bound items can be deleted', async () => {
@@ -264,7 +253,6 @@ describe('tavern explorer surface', () => {
       binding: { mode: 'tavern', worldbookIds: ['worldbook-1'], characterId: 'character-1' },
     })
 
-    await openLibrary()
     fireEvent.click(await screen.findByTitle('User settings'))
 
     // Choose the bound session; the unbind button appears once the binding loads.

@@ -12,6 +12,7 @@ import { createFloatingSurfaceStore } from './explorer-store.ts'
 import { NovelFloatButton } from './NovelFloatButton.tsx'
 import { NovelProjectExplorer, type NovelExplorerInjected } from './NovelProjectExplorer.tsx'
 import { NovelWorkspaceTab, type NovelWorkspaceTabInjected } from './NovelWorkspaceTab.tsx'
+import { TavernChatSurface } from './TavernChatSurface.tsx'
 import { en, zh, type NovelLocaleKey } from './locales.ts'
 
 export type { NovelWorkspaceTabInjected, NovelWorkspaceTabProps } from './NovelWorkspaceTab.tsx'
@@ -103,4 +104,13 @@ export function apply(ctx: ClientContext): void {
     store: tavernStore,
     inject: tavernInjected,
   }, NovelProjectExplorer))
+
+  ctx.slots.inject('shell.overlay', () => ctx.slots.register({
+    name: 'shell.overlay',
+    id: 'tavern-chat',
+    label: () => t('chatView'),
+    locale: NS,
+    store: tavernStore,
+    inject: tavernInjected,
+  }, TavernChatSurface))
 }
