@@ -2,12 +2,12 @@
    Clean modern dark surface: flat panels, one indigo accent, system sans. */
 
 .explorer {
-  --gi-ink: #14181f;
-  --gi-ink-2: #171c24;
-  --gi-ink-3: #1f2631;
-  --gi-gold: #8b9cf7;
-  --gi-gold-bright: #aeb9fb;
-  --gi-cream: #e8edf4;
+  --gi-ink: #131313;
+  --gi-ink-2: #171717;
+  --gi-ink-3: #1d1d1d;
+  --gi-gold: #cbaecc;
+  --gi-gold-bright: #d9c6da;
+  --gi-cream: rgba(247, 247, 231, 0.9);
   --gi-cream-2: #aab4c3;
   --gi-cream-3: #7b8696;
   --gi-line: rgba(49, 59, 77, 0.9);
@@ -19,7 +19,7 @@
   z-index: 1100;
   display: flex;
   flex-direction: column;
-  background: #14181f;
+  background: #171717;
   color: var(--gi-cream);
   font-family: var(--gi-display);
 }
@@ -40,8 +40,8 @@
   justify-content: space-between;
   height: 56px;
   padding: 0 22px;
-  border-bottom: 1px solid #262e3b;
-  background: #171c24;
+  border-bottom: 1px solid rgba(52, 61, 56, 0.44);
+  background: #141414;
 }
 
 .title {
@@ -215,7 +215,7 @@
 }
 
 .treeItemActive {
-  background: #232c3b;
+  background: #1f1f1f;
 }
 
 /* ── library home (imports + presets + roleplay, full width) ─────────────── */
@@ -246,7 +246,7 @@
   padding: 14px 16px;
   border: 1px solid var(--gi-line);
   border-radius: 10px;
-  background: #1d232d;
+  background: #1c1c1c;
 }
 
 .importCard strong {
@@ -283,7 +283,7 @@
   padding: 6px 10px;
   border: 1px solid var(--gi-line);
   border-radius: 8px;
-  background: #1f2631;
+  background: #1a1a1a;
   color: var(--gi-cream);
   font: inherit;
   font-size: 12px;
@@ -306,7 +306,7 @@
   z-index: 1;
   padding: 8px 10px;
   border-bottom: 1px solid var(--gi-line-strong);
-  background: #171c24;
+  background: #141414;
   color: var(--gi-cream-3);
   text-align: left;
   font-weight: 600;
@@ -382,7 +382,7 @@
   border-radius: 14px;
   border: 1px solid var(--gi-line-strong);
   object-fit: cover;
-  background: #1f2631;
+  background: #1a1a1a;
 }
 
 .charAvatarFallback {
@@ -394,7 +394,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #232c3b;
+  background: #1f1f1f;
   color: var(--gi-gold-bright);
   font-size: 34px;
 }
@@ -416,7 +416,7 @@
   padding: 12px 14px;
   border: 1px solid var(--gi-line);
   border-radius: 10px;
-  background: #1d232d;
+  background: #1c1c1c;
 }
 
 .charField h5 {
@@ -450,7 +450,7 @@
 .extDetails {
   border: 1px solid var(--gi-line);
   border-radius: 10px;
-  background: #1d232d;
+  background: #1c1c1c;
 }
 
 .extSummary {
@@ -484,7 +484,7 @@
   padding: 10px 14px;
   border: 1px solid var(--gi-line);
   border-radius: 8px;
-  background: #1d232d;
+  background: #1c1c1c;
   font-size: 13px;
 }
 
@@ -528,7 +528,7 @@
 
 .badgeKind {
   background: rgba(139, 156, 247, 0.14);
-  color: #aeb9fb;
+  color: #d9c6da;
 }
 
 .entryCard {
@@ -538,7 +538,7 @@
   padding: 10px 14px;
   border: 1px solid var(--gi-line);
   border-radius: 8px;
-  background: #1d232d;
+  background: #1c1c1c;
 }
 
 .entryCard strong {
@@ -614,7 +614,7 @@
   padding: 14px;
   border: 1px solid var(--gi-line-strong);
   border-radius: 10px;
-  background: #1f2631;
+  background: #1a1a1a;
 }
 
 .roleplay select {
