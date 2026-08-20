@@ -310,7 +310,19 @@ function fakeApi(overrides: Partial<{ muxFrames: MuxFrame[]; hostFrames: HostFra
       },
       async importCharacter(request) {
         return { rpcId: request.rpcId, result: { ok: true, value: { character: { id: 'character-c1' as never, name: 'Aya', format: 'json' } } } }
+      },      async updateCharacter(request) {
+        return { rpcId: request.rpcId, result: { ok: true, value: { character: { id: request.payload.id as never, name: request.payload.name ?? 'Aya', format: 'json' } } } }
       },
+      async updateCharacterScripts(request) {
+        return { rpcId: request.rpcId, result: { ok: true, value: { scripts: [] } } }
+      },
+      async saveWorldBookEntry(request) {
+        return { rpcId: request.rpcId, result: { ok: true, value: { updated: true } } }
+      },
+      async deleteWorldBookEntry(request) {
+        return { rpcId: request.rpcId, result: { ok: true, value: { deleted: true } } }
+      },
+
       async deleteCharacter(request) {
         return { rpcId: request.rpcId, result: { ok: true, value: { deleted: true } } }
       },

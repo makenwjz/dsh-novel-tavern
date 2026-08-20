@@ -307,7 +307,11 @@ export class FakeApiClient implements IApiClient {
     importWorldBook: async () => ok({ worldbook: { id: 'worldbook-w1' as never, name: 'Worldbook', entryCount: 0 } }),
     deleteWorldBook: async () => ok({ deleted: true }),
     listCharacters: async () => ok({ characters: [] }),
-    importCharacter: async () => ok({ character: { id: 'character-c1' as never, name: 'Aya', format: 'json' } }),
+    importCharacter: async () => ok({ character: { id: 'character-c1' as never, name: 'Aya', format: 'json' } }),    updateCharacter: async () => ok({ character: { id: 'character-c1' as never, name: 'Aya', format: 'json' } }),
+    updateCharacterScripts: async () => ok({ scripts: [] }),
+    saveWorldBookEntry: async () => ok({ updated: true }),
+    deleteWorldBookEntry: async () => ok({ deleted: true }),
+
     deleteCharacter: async () => ok({ deleted: true }),
     binding: async () => ok({ binding: null }),
     setBinding: async payload => ok({ binding: payload.binding }),
