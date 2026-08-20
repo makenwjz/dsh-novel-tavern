@@ -265,7 +265,10 @@ export class FakeApiClient implements IApiClient {
     advanceStage: async () => ok({ binding: { mode: 'novel', worldbookIds: [], characterId: null } }),
     setGreeting: async () => ok({ appended: true }),
     setMvu: async payload => ok({ binding: { mode: 'tavern', worldbookIds: [], characterId: null, mvuVariables: payload.variables } }),
-    importChat: async () => ok({ imported: 2 }),
+    importChat: async () => ok({ imported: 2 }),    saveJailbreak: async payload => ok({ jailbreak: { id: 'jailbreak-j1' as never, name: payload.name, content: payload.content } }),
+    listJailbreaks: async () => ok({ jailbreaks: [] }),
+    deleteJailbreak: async () => ok({ deleted: true }),
+
     setPersona: async payload => ok({ binding: { mode: 'tavern', worldbookIds: [], characterId: null, persona: payload.persona } }),
     setWorldBookEntryEnabled: async () => ok({ updated: true }),
     importPromptPreset: async () => ok({ preset: { id: 'preset-p1' as never, name: '预设', promptCount: 1, enabledCount: 1 } }),

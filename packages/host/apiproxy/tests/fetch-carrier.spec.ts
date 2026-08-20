@@ -346,7 +346,16 @@ function fakeApi(overrides: Partial<{ muxFrames: MuxFrame[]; hostFrames: HostFra
       },
       async importChat(request) {
         return { rpcId: request.rpcId, result: { ok: true, value: { imported: 2 } } }
+      },      async saveJailbreak(request) {
+        return { rpcId: request.rpcId, result: { ok: true, value: { jailbreak: { id: 'jailbreak-j1' as never, name: request.payload.name, content: request.payload.content } } } }
       },
+      async listJailbreaks(request) {
+        return { rpcId: request.rpcId, result: { ok: true, value: { jailbreaks: [] } } }
+      },
+      async deleteJailbreak(request) {
+        return { rpcId: request.rpcId, result: { ok: true, value: { deleted: true } } }
+      },
+
       async setWorldBookEntryEnabled(request) {
         return { rpcId: request.rpcId, result: { ok: true, value: { updated: true } } }
       },

@@ -37,6 +37,9 @@ type TavernWorldBookRow = { id: WorldBookId; name: string; entries: Array<{ name
 /** One tavern character node. */
 type TavernCharacterRow = { id: CharacterId; name: string; format: 'json' | 'png'; extensions: Record<string, unknown>; hasAvatar: boolean; description: string; personality: string; scenario: string; mesExample: string; tags: string[]; greetings: string[] }
 
+/** One script row across the card collection (regex or helper). */
+type ScriptRow = { name: string; kind: 'regex' | 'helper'; enabled: boolean; findRegex: string; replaceString: string; markdownOnly: boolean; promptOnly: boolean; card: string; characterId: string }
+
 /** The tavern tree payload. */
 type TavernTree = { worldbooks: TavernWorldBookRow[]; characters: TavernCharacterRow[] }
 
@@ -46,6 +49,44 @@ type Selection =
   | { readonly type: 'novel'; readonly section: string }
   | { readonly type: 'worldbook'; readonly book: TavernWorldBookRow }
   | { readonly type: 'character'; readonly character: TavernCharacterRow }
+  | { readonly type: 'script'; readonly script: { readonly name: string; readonly kind: 'regex' | 'helper'; readonly enabled: boolean; readonly findRegex: string; readonly replaceString: string; readonly markdownOnly: boolean; readonly promptOnly: boolean; readonly card: string; readonly characterId: string } }
+  | { readonly type: 'preset'; readonly preset: { readonly id: string; readonly name: string; readonly promptCount: number; readonly enabledCount: number } }
+  | { readonly type: 'jailbreak'; readonly jailbreak: { readonly id: string; readonly name: string; readonly content: string } }
+
+/** The inline worldbook-entry editor (add or update). */
+function EntryEditor({ initial, onSave, onCancel, busy }: {
+  initial: { name: string; keys: string[]; content: string; comment: string; enabled: boolean } | null
+  onSave: (fields: { name: string; keys?: string[]; content?: string; comment?: string; enabled?: boolean }) => void
+  onCancel: () => void
+  busy: boolean
+}): ReactNode {
+  return (
+    <div className={css.entryEditor}>
+      <input className={css.charEditArea} aria-label="entry-name" defaultValue={initial?.name ?? ''} placeholder="条目名" />
+      <input className={css.charEditArea} aria-label="entry-keys" defaultValue={initial?.keys.join('、') ?? ''} placeholder="关键词（顿号分隔）" />
+      <input className={css.charEditArea} aria-label="entry-comment" defaultValue={initial?.comment ?? ''} placeholder="备注（可选）" />
+      <textarea className={css.charEditArea} aria-label="entry-content" defaultValue={initial?.content ?? ''} placeholder="条目内容" rows={4} />
+      <div className={css.entryEditorActions}>
+        <button
+          type="button"
+          className={css.actionButton}
+          disabled={busy}
+          onClick={event => {
+            const root = (event.target as HTMLButtonElement).parentElement
+            const name = (root?.querySelector('input[aria-label="entry-name"]') as HTMLInputElement | null)?.value ?? ''
+            const keys = (root?.querySelector('input[aria-label="entry-keys"]') as HTMLInputElement | null)?.value.split(/[、,，\s]+/).filter(Boolean) ?? []
+            const comment = (root?.querySelector('input[aria-label="entry-comment"]') as HTMLInputElement | null)?.value ?? ''
+            const content = (root?.querySelector('textarea[aria-label="entry-content"]') as HTMLTextAreaElement | null)?.value ?? ''
+            onSave({ name, keys, content, comment, enabled: initial?.enabled ?? true })
+          }}
+        >
+          保存条目
+        </button>
+        <button type="button" className={css.miniButton} disabled={busy} onClick={onCancel}>取消</button>
+      </div>
+    </div>
+  )
+}
 
 /** Load the tavern project tree through the connection's tavern API face. */
 async function loadTavernTree(api: Pick<IApiClient, 'tavern'>): Promise<TavernTree> {
@@ -102,7 +143,6 @@ export function NovelProjectExplorer({ useStore, actions, read, api, useSessions
   const [tree, setTree] = useState<TavernTree | null>(null)
   const [error, setError] = useState('')
   const [avatar, setAvatar] = useState<Record<string, string>>({})
-  const [expandedBooks, setExpandedBooks] = useState<Set<string>>(new Set())
   const [reloadKey, setReloadKey] = useState(0)
   // Tavern mode starts on the WeChat-style chat; the library stays one tab away.
   const [tavernView, setTavernView] = useState<'chat' | 'library'>('chat')
@@ -117,9 +157,14 @@ export function NovelProjectExplorer({ useStore, actions, read, api, useSessions
   const [notice, setNotice] = useState<{ kind: 'error' | 'success'; text: string; boundSessionIds?: string[] } | null>(null)
   const [worldBookDraft, setWorldBookDraft] = useState('')
   const [presetDraft, setPresetDraft] = useState('')
-  const [presets, setPresets] = useState<Array<{ id: string; name: string; promptCount: number; enabledCount: number }>>([])
+  /** AI-jailbreak presets (破限), managed in the 预设 rail. */
+  const [jailbreaks, setJailbreaks] = useState<Array<{ id: string; name: string; content: string }>>([])
   const [wbQuery, setWbQuery] = useState('')
+  /** The worldbook entry being edited inline, or null. */
+  const [wbEditing, setWbEditing] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  /** The active leftmost rail section in the three-column library. */
+  const [rail, setRail] = useState<'characters' | 'worldbooks' | 'scripts' | 'presets' | 'settings'>('characters')
   // Session to open in the chat view when a blocked delete jumps there.
   const [focusSession, setFocusSession] = useState('')
 
@@ -133,7 +178,7 @@ export function NovelProjectExplorer({ useStore, actions, read, api, useSessions
         if (mode === 'novel') setNovel(value as NovelWorkspaceSnapshot)
         else {
           setTree(value as TavernTree)
-          reloadPresets()
+          reloadJailbreaks()
         }
       },
       (reason: unknown) => {
@@ -174,6 +219,112 @@ export function NovelProjectExplorer({ useStore, actions, read, api, useSessions
     }
   }
 
+  /** Worldbooks related to one character (the card's own name embedded in the
+   *  worldbook name), so picking a card also picks its lore. */
+  const relatedWorldbooks = (character: TavernCharacterRow): TavernWorldBookRow[] => {
+    if (tree === null) return []
+    return tree.worldbooks.filter(book => book.name.includes(character.name) || character.name.includes(book.name.replace(/\.\d+$/, '')))
+  }
+
+  /** Save one character's editor fields through the sidecar override. */
+  const updateCharacterFields = (character: TavernCharacterRow, fields: { name?: string; description?: string; personality?: string; scenario?: string; mesExample?: string }): void => {
+    if (busy) return
+    setBusy(true)
+    void api.tavern.updateCharacter({ id: character.id, ...fields }).then((result) => {
+      const r = result.result
+      if (!r.ok) {
+        setNotice({ kind: 'error', text: t('importFailed', { reason: r.error.message }) })
+        setBusy(false)
+        return
+      }
+      setNotice({ kind: 'success', text: t('characterSaved') })
+      setBusy(false)
+      reloadTavern()
+    }, (reason: unknown) => {
+      setNotice({ kind: 'error', text: t('importFailed', { reason: reason instanceof Error ? reason.message : String(reason) }) })
+      setBusy(false)
+    })
+  }
+
+  /** Start a tavern chat with one character and its related worldbooks. */
+  const startChatWithCharacter = (character: TavernCharacterRow): void => {
+    if (busy || sessionId === '') {
+      setNotice({ kind: 'error', text: t('chooseSession') })
+      return
+    }
+    const books = relatedWorldbooks(character)
+    runRoleplay(() => api.tavern.startRoleplay({
+      sessionId: sessionId as never,
+      characterIds: [character.id] as never,
+      worldbookIds: books.map(book => book.id) as never,
+    }).then((result) => {
+      if (!result.result.ok) throw new Error(result.result.error.message)
+      setTavernView('chat')
+      setFocusSession(sessionId)
+    }))
+  }
+
+  /** All regex/helper scripts across every imported card, for the rail list. */
+  const allScripts = (): ScriptRow[] => {
+    const rows: ScriptRow[] = []
+    for (const character of tree?.characters ?? []) {
+      for (const script of cardScripts(character.extensions)) {
+        rows.push({
+          name: script.name,
+          kind: script.kind,
+          enabled: script.enabled,
+          findRegex: script.findRegex,
+          replaceString: script.replaceString,
+          markdownOnly: script.markdownOnly,
+          promptOnly: false,
+          card: character.name,
+          characterId: character.id,
+        })
+      }
+    }
+    return rows
+  }
+
+  /** Save a worldbook entry (add or update) from the inline editor. */
+  const saveEntry = (bookId: string, fields: { name: string; keys?: string[]; content?: string; comment?: string; enabled?: boolean }): void => {
+    if (busy) return
+    setBusy(true)
+    void api.tavern.saveWorldBookEntry({ id: bookId as never, ...fields }).then((result) => {
+      const r = result.result
+      if (!r.ok) {
+        setNotice({ kind: 'error', text: t('importFailed', { reason: r.error.message }) })
+      } else {
+        setNotice({ kind: 'success', text: t('entrySaved') })
+        setWbEditing(null)
+      }
+      setBusy(false)
+      reloadTavern()
+    }, (reason: unknown) => {
+      setNotice({ kind: 'error', text: t('importFailed', { reason: reason instanceof Error ? reason.message : String(reason) }) })
+      setBusy(false)
+    })
+  }
+
+  /** Delete one worldbook entry. */
+  const deleteEntry = (bookId: string, name: string): void => {
+    if (busy) return
+    setBusy(true)
+    void api.tavern.deleteWorldBookEntry({ id: bookId as never, name }).then((result) => {
+      const r = result.result
+      if (!r.ok) {
+        setNotice({ kind: 'error', text: t('importFailed', { reason: r.error.message }) })
+      } else {
+        setNotice({ kind: 'success', text: t('entryDeleted') })
+      }
+      setBusy(false)
+      reloadTavern()
+    }, (reason: unknown) => {
+      setNotice({ kind: 'error', text: t('importFailed', { reason: reason instanceof Error ? reason.message : String(reason) }) })
+      setBusy(false)
+    })
+  }
+
+  /** The runRoleplay helper for the settings rail. */
   const runRoleplay = (action: () => Promise<void>): void => {
     void action().catch(() => { /* binding reloads via the session effect */ })
     setBinding(null)
@@ -218,13 +369,70 @@ export function NovelProjectExplorer({ useStore, actions, read, api, useSessions
     setReloadKey(value => value + 1)
   }
 
-  /** Refresh the imported prompt preset list. */
-  const reloadPresets = (): void => {
-    void api.tavern.listPromptPresets({}).then((result) => {
+  /** Refresh the jailbreak (破限) preset list. */
+  const reloadJailbreaks = (): void => {
+    void api.tavern.listJailbreaks({}).then((result) => {
       if (result.result.ok) {
-        setPresets(result.result.value.presets.map(preset => ({ id: preset.id, name: preset.name, promptCount: preset.promptCount, enabledCount: preset.enabledCount })))
+        setJailbreaks(result.result.value.jailbreaks.map(jailbreak => ({ id: jailbreak.id, name: jailbreak.name, content: jailbreak.content })))
       }
     }, () => {})
+  }
+
+  /** Create or update one jailbreak preset. */
+  const saveJailbreakPreset = (id: string | undefined, name: string, content: string): void => {
+    if (busy) return
+    setBusy(true)
+    void api.tavern.saveJailbreak({ ...(id === undefined ? {} : { id: id as never }), name, content }).then((result) => {
+      const r = result.result
+      if (!r.ok) {
+        setNotice({ kind: 'error', text: t('importFailed', { reason: r.error.message }) })
+        setBusy(false)
+        return
+      }
+      setNotice({ kind: 'success', text: t('jailbreakSaved') })
+      setBusy(false)
+      reloadJailbreaks()
+    }, (reason: unknown) => {
+      setNotice({ kind: 'error', text: t('importFailed', { reason: reason instanceof Error ? reason.message : String(reason) }) })
+      setBusy(false)
+    })
+  }
+
+  /** Delete one jailbreak preset. */
+  const deleteJailbreakPreset = (id: string, name: string): void => {
+    if (busy) return
+    setBusy(true)
+    setNotice(null)
+    void api.tavern.deleteJailbreak({ id: id as never }).then((result) => {
+      const r = result.result
+      if (!r.ok) {
+        setNotice({ kind: 'error', text: t('importFailed', { reason: r.error.message }) })
+      } else {
+        setNotice({ kind: 'success', text: t('jailbreakDeleted', { name }) })
+        setSelection({ type: 'root' })
+      }
+      setBusy(false)
+      reloadJailbreaks()
+    }, (reason: unknown) => {
+      setNotice({ kind: 'error', text: t('importFailed', { reason: reason instanceof Error ? reason.message : String(reason) }) })
+      setBusy(false)
+    })
+  }
+
+  /** Import a jailbreak (破限) preset from a text file. */
+  const onJailbreakFile = (event: ChangeEvent<HTMLInputElement>): void => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (file === undefined || busy) return
+    setBusy(true)
+    setNotice(null)
+    const reader = new FileReader()
+    reader.onload = () => {
+      const content = String(reader.result ?? '')
+      const name = file.name.replace(/\.(txt|json|md)$/i, '') || '导入的破限'
+      saveJailbreakPreset(undefined, name, content)
+    }
+    reader.readAsText(file)
   }
 
   /** Run the prompt-preset import RPC and fold the result into state. */
@@ -236,7 +444,6 @@ export function NovelProjectExplorer({ useStore, actions, read, api, useSessions
       } else {
         setPresetDraft('')
         setNotice({ kind: 'success', text: t('importPresetOk', { name: r.value.preset.name, count: r.value.preset.promptCount }) })
-        reloadPresets()
       }
       setBusy(false)
     }, fail)
@@ -262,23 +469,6 @@ export function NovelProjectExplorer({ useStore, actions, read, api, useSessions
     setBusy(true)
     setNotice(null)
     void importPresetText(presetDraft)
-  }
-
-  /** Delete one imported prompt preset (blocked while a session binds it). */
-  const deletePreset = (id: string, name: string): void => {
-    if (busy) return
-    setBusy(true)
-    setNotice(null)
-    void api.tavern.deletePromptPreset({ id: id as never }).then((result) => {
-      const r = result.result
-      if (!r.ok) {
-        fail(new Error(r.error.message))
-      } else {
-        setNotice({ kind: 'success', text: t('presetDeleted', { name }) })
-        reloadPresets()
-      }
-      setBusy(false)
-    }, fail)
   }
 
   /** Import a character card file (.png card or .json) as base64. */
@@ -475,10 +665,115 @@ export function NovelProjectExplorer({ useStore, actions, read, api, useSessions
     return <div><h4 className={css.detailTitle}>{section.label}</h4>{section.render()}</div>
   }
 
+  /** Column 2 of the library: the list of the active rail section. */
+  const renderRailList = (): ReactNode => {
+    if (tree === null) return <p className={css.hint}>{t('loading')}</p>
+    if (rail === 'characters') {
+      return (
+        <div className={css.railListInner}>
+          <h4 className={css.railListTitle}>{t('railCharacters')}</h4>
+          {tree.characters.length === 0 ? <p className={css.muted}>{t('libraryEmptyCharacters')}</p> : null}
+          {tree.characters.map(character => {
+            const active = selection.type === 'character' && selection.character.id === character.id
+            return (
+              <button key={character.id} type="button" className={active ? `${css.railCard} ${css.railCardActive}` : css.railCard} onClick={() => selectCharacter(character)}>
+                {avatar[character.id] === undefined
+                  ? <span className={css.railCardAvatarFallback}>{character.name.slice(0, 1) || '🎭'}</span>
+                  : <img className={css.railCardAvatar} src={`data:image/png;base64,${avatar[character.id]}`} alt={character.name} />}
+                <span className={css.railCardMeta}>
+                  <strong>{character.name}</strong>
+                  <span className={css.muted}>{character.format}{relatedWorldbooks(character).length > 0 ? ` · 📚${relatedWorldbooks(character).length}` : ''}</span>
+                </span>
+              </button>
+            )
+          })}
+        </div>
+      )
+    }
+    if (rail === 'worldbooks') {
+      return (
+        <div className={css.railListInner}>
+          <h4 className={css.railListTitle}>{t('railWorldbooks')}</h4>
+          {tree.worldbooks.length === 0 ? <p className={css.muted}>{t('libraryEmptyWorldbooks')}</p> : null}
+          {tree.worldbooks.map(book => {
+            const active = selection.type === 'worldbook' && selection.book.id === book.id
+            return (
+              <button key={book.id} type="button" className={active ? `${css.railCard} ${css.railCardActive}` : css.railCard} onClick={() => setSelection({ type: 'worldbook', book })}>
+                <span className={css.railCardIcon}>📚</span>
+                <span className={css.railCardMeta}>
+                  <strong>{book.name}</strong>
+                  <span className={css.muted}>{t('entryCount', { count: book.entries.length })}</span>
+                </span>
+              </button>
+            )
+          })}
+        </div>
+      )
+    }
+    if (rail === 'scripts') {
+      const scripts = allScripts()
+      return (
+        <div className={css.railListInner}>
+          <h4 className={css.railListTitle}>{t('railScripts')}</h4>
+          {scripts.length === 0 ? <p className={css.muted}>{t('libraryEmptyScripts')}</p> : null}
+          {scripts.map((script, index) => {
+            const active = selection.type === 'script' && selection.script.name === script.name && selection.script.card === script.card
+            return (
+              <button key={index} type="button" className={active ? `${css.railCard} ${css.railCardActive}` : css.railCard} onClick={() => setSelection({ type: 'script', script })}>
+                <span className={css.railCardIcon}>{script.kind === 'regex' ? '🧩' : '🧰'}</span>
+                <span className={css.railCardMeta}>
+                  <strong>{script.name}</strong>
+                  <span className={css.muted}>{script.card}{script.enabled ? '' : ` · ${t('scriptDisabled')}`}</span>
+                </span>
+              </button>
+            )
+          })}
+        </div>
+      )
+    }
+    if (rail === 'presets') {
+      return (
+        <div className={css.railListInner}>
+          <h4 className={css.railListTitle}>{t('railPresets')}</h4>
+          <button type="button" className={css.railCard} onClick={() => setSelection({ type: 'jailbreak', jailbreak: { id: '', name: '', content: '' } })}>
+            <span className={css.railCardIcon}>＋</span>
+            <span className={css.railCardMeta}>
+              <strong>{t('jailbreakNew')}</strong>
+              <span className={css.muted}>{t('jailbreakNewHint')}</span>
+            </span>
+          </button>
+          <label className={css.railImport}>
+            <span className={css.railImportLabel}>📥 {t('jailbreakImport')}</span>
+            <input type="file" accept=".txt,.json,.md,text/plain" aria-label={t('jailbreakImport')} disabled={busy} onChange={onJailbreakFile} />
+          </label>
+          {jailbreaks.length === 0 ? <p className={css.muted}>{t('libraryEmptyPresets')}</p> : null}
+          {jailbreaks.map(jailbreak => {
+            const active = selection.type === 'jailbreak' && selection.jailbreak.id === jailbreak.id
+            return (
+              <button key={jailbreak.id} type="button" className={active ? `${css.railCard} ${css.railCardActive}` : css.railCard} onClick={() => setSelection({ type: 'jailbreak', jailbreak })}>
+                <span className={css.railCardIcon}>🔓</span>
+                <span className={css.railCardMeta}>
+                  <strong>{jailbreak.name}</strong>
+                  <span className={css.muted}>{t('jailbreakPrompt')}</span>
+                </span>
+              </button>
+            )
+          })}
+        </div>
+      )
+    }
+    // settings
+    return (
+      <div className={css.railListInner}>
+        <h4 className={css.railListTitle}>{t('railSettings')}</h4>
+        <p className={css.muted}>{t('settingsHint')}</p>
+      </div>
+    )
+  }
+
   const renderTavernDetail = (): ReactNode => {
-    if (selection.type === 'root') {
-      // SillyTavern-style library home: imports, presets, and roleplay setup
-      // use the full width instead of a cramped sidebar.
+    // The settings rail hosts sessions, persona, roleplay, and imports.
+    if (rail === 'settings') {
       return (
         <div className={css.home}>
           <section className={css.homeSection}>
@@ -531,19 +826,6 @@ export function NovelProjectExplorer({ useStore, actions, read, api, useSessions
                 </button>
               </div>
             </div>
-            {presets.length === 0 ? null : (
-              <ul className={css.homeList}>
-                {presets.map(preset => (
-                  <li key={preset.id} className={css.detailItem}>
-                    <strong>{preset.name}</strong>
-                    <span className={css.muted}>{t('presetCount', { enabled: preset.enabledCount, total: preset.promptCount })}</span>
-                    <button type="button" className={css.dangerButton} disabled={busy} onClick={() => deletePreset(preset.id, preset.name)}>
-                      {t('deletePresetAction')}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
           </section>
           <section className={css.homeSection}>
             <h4 className={css.detailTitle}>{t('startRoleplay')}</h4>
@@ -609,6 +891,107 @@ export function NovelProjectExplorer({ useStore, actions, read, api, useSessions
         </div>
       )
     }
+    if (selection.type === 'script') {
+      const { script } = selection
+      return (
+        <div className={css.wbDetail}>
+          <div className={css.wbHeader}>
+            <h4 className={css.detailTitle}>{script.name}</h4>
+            <span className={css.badgeKind}>{script.kind === 'regex' ? t('scriptRegex') : t('scriptHelper')}</span>
+            <span className={css.paneHeaderSpacer} />
+            <span className={css.muted}>{t('scriptCard', { name: script.card })}</span>
+          </div>
+          <p className={css.status}>{t('scriptHint')}</p>
+          {script.kind === 'regex' ? (
+            <div className={css.charSections}>
+              <section className={css.charField}>
+                <h5 className={css.detailTitle}>{t('scriptEnabled')}</h5>
+                <label className={css.worldbookCheck}>
+                  <input
+                    type="checkbox"
+                    defaultChecked={script.enabled}
+                    aria-label={t('scriptEnabled')}
+                  />
+                  <span>{script.enabled ? t('scriptEnabled') : t('scriptDisabled')}</span>
+                </label>
+              </section>
+              <section className={css.charField}>
+                <h5 className={css.detailTitle}>{t('scriptFind')}</h5>
+                <textarea className={css.charEditArea} aria-label={t('scriptFind')} defaultValue={script.findRegex} rows={3} />
+              </section>
+              <section className={css.charField}>
+                <h5 className={css.detailTitle}>{t('scriptReplace')}</h5>
+                <textarea className={css.charEditArea} aria-label={t('scriptReplace')} defaultValue={script.replaceString} rows={3} />
+              </section>
+            </div>
+          ) : null}
+          <button
+            type="button"
+            className={css.actionButton}
+            disabled={busy}
+            onClick={event => {
+              const root = (event.target as HTMLButtonElement).parentElement
+              const enabled = (root?.querySelector('input[type="checkbox"]') as HTMLInputElement | null)?.checked ?? script.enabled
+              const findRegex = (root?.querySelector('textarea[aria-label="' + t('scriptFind') + '"]') as HTMLTextAreaElement | null)?.value ?? script.findRegex
+              const replaceString = (root?.querySelector('textarea[aria-label="' + t('scriptReplace') + '"]') as HTMLTextAreaElement | null)?.value ?? script.replaceString
+              void api.tavern.updateCharacterScripts({ id: script.characterId as never, overrides: [{ name: script.name, enabled, findRegex, replaceString }] }).then((result) => {
+                const r = result.result
+                if (!r.ok) {
+                  setNotice({ kind: 'error', text: t('importFailed', { reason: r.error.message }) })
+                  return
+                }
+                setNotice({ kind: 'success', text: t('scriptSaved') })
+                reloadTavern()
+              }, () => {})
+            }}
+          >
+            {t('scriptSave')}
+          </button>
+        </div>
+      )
+    }
+    if (selection.type === 'jailbreak') {
+      const { jailbreak } = selection
+      const isNew = jailbreak.id === ''
+      return (
+        <div className={css.wbDetail}>
+          <div className={css.wbHeader}>
+            <h4 className={css.detailTitle}>{isNew ? t('jailbreakNew') : jailbreak.name}</h4>
+            <span className={css.badgeKind}>🔓 {t('railPresets')}</span>
+            <span className={css.paneHeaderSpacer} />
+            {isNew ? null : (
+              <button type="button" className={css.dangerButton} disabled={busy} onClick={() => deleteJailbreakPreset(jailbreak.id, jailbreak.name)}>
+                {t('deleteJailbreak')}
+              </button>
+            )}
+          </div>
+          <p className={css.status}>{t('jailbreakHint')}</p>
+          <div className={css.charSections}>
+            <section className={css.charField}>
+              <h5 className={css.detailTitle}>{t('jailbreakName')}</h5>
+              <input className={css.charEditArea} aria-label={t('jailbreakName')} defaultValue={jailbreak.name} />
+            </section>
+          </div>
+          <section className={css.charField}>
+            <h5 className={css.detailTitle}>{t('jailbreakContent')}</h5>
+            <textarea className={css.jailbreakArea} aria-label={t('jailbreakContent')} defaultValue={jailbreak.content} rows={14} />
+          </section>
+          <button
+            type="button"
+            className={css.actionButton}
+            disabled={busy}
+            onClick={event => {
+              const root = (event.target as HTMLButtonElement).parentElement
+              const name = (root?.querySelector('input[aria-label]') as HTMLInputElement | null)?.value ?? ''
+              const content = (root?.querySelector('textarea[aria-label]') as HTMLTextAreaElement | null)?.value ?? ''
+              saveJailbreakPreset(isNew ? undefined : jailbreak.id, name, content)
+            }}
+          >
+            {t('jailbreakSave')}
+          </button>
+        </div>
+      )
+    }
     if (selection.type === 'worldbook') {
       const { book } = selection
       const query = wbQuery.trim().toLowerCase()
@@ -622,7 +1005,7 @@ export function NovelProjectExplorer({ useStore, actions, read, api, useSessions
         <div className={css.wbDetail}>
           <div className={css.wbHeader}>
             <h4 className={css.detailTitle}>{book.name}</h4>
-            <span className={css.muted}>{t('entryCount', { count: book.entries.length })}</span>
+            <span className={css.wbSummary}>{t('wbSummary', { enabled: book.entries.filter(entry => entry.enabled).length, total: book.entries.length })}</span>
             <span className={css.paneHeaderSpacer} />
             <input
               className={css.searchBox}
@@ -631,6 +1014,9 @@ export function NovelProjectExplorer({ useStore, actions, read, api, useSessions
               value={wbQuery}
               onChange={event => setWbQuery(event.target.value)}
             />
+            <button type="button" className={css.actionButton} disabled={busy} onClick={() => setWbEditing('__new__')}>
+              {t('entryNew')}
+            </button>
             <button type="button" className={css.dangerButton} onClick={() => deleteWorldBook(book.id, book.name)}>
               {t('deleteWorldBookAction')}
             </button>
@@ -642,42 +1028,73 @@ export function NovelProjectExplorer({ useStore, actions, read, api, useSessions
                 <th className={css.wbThName}>{t('wbEntryName')}</th>
                 <th className={css.wbThKeys}>{t('wbEntryKeys')}</th>
                 <th className={css.wbThContent}>{t('wbEntryContent')}</th>
+                <th className={css.wbThActions}>{t('wbActions')}</th>
               </tr>
             </thead>
             <tbody>
-              {entries.map((entry, index) => (
-                <tr key={index} className={entry.enabled ? undefined : css.wbRowOff}>
-                  <td>
-                    <input
-                      type="checkbox"
-                      checked={entry.enabled}
-                      aria-label={t('entryToggle', { name: entry.comment || entry.name })}
-                      onChange={event => {
-                        const enabled = event.target.checked
-                        void api.tavern.setWorldBookEntryEnabled({ id: book.id as never, entryName: entry.name || entry.comment, enabled }).then(result => {
-                          if (!result.result.ok) {
-                            setNotice({ kind: 'error', text: t('importFailed', { reason: result.result.error.message }) })
-                            return
-                          }
-                          setNotice({ kind: 'success', text: t('entryUpdated') })
-                          reloadTavern()
-                        }, () => {})
-                      }}
-                    />
-                  </td>
-                  <td className={css.wbName}>
-                    <strong>{entry.name.length > 0 ? entry.name : (entry.comment.length > 0 ? entry.comment : t('entryNoKeys'))}</strong>
-                    {entry.comment.length === 0 ? null : <span className={css.muted}>{entry.comment}</span>}
-                  </td>
-                  <td className={css.wbKeys}>{entry.keys.length > 0 ? entry.keys.join('、') : t('entryNoKeys')}</td>
-                  <td className={css.wbContent}>{entry.content}</td>
-                </tr>
-              ))}
+              {entries.map((entry, index) => {
+                const entryName = entry.name.length > 0 ? entry.name : entry.comment
+                const editing = wbEditing === entryName
+                return (
+                  <tr key={index} className={entry.enabled ? undefined : css.wbRowOff}>
+                    <td>
+                      <input
+                        type="checkbox"
+                        checked={entry.enabled}
+                        aria-label={t('entryToggle', { name: entry.comment || entry.name })}
+                        onChange={event => {
+                          const enabled = event.target.checked
+                          void api.tavern.setWorldBookEntryEnabled({ id: book.id as never, entryName: entry.name || entry.comment, enabled }).then(result => {
+                            if (!result.result.ok) {
+                              setNotice({ kind: 'error', text: t('importFailed', { reason: result.result.error.message }) })
+                              return
+                            }
+                            setNotice({ kind: 'success', text: t('entryUpdated') })
+                            reloadTavern()
+                          }, () => {})
+                        }}
+                      />
+                    </td>
+                    <td className={css.wbName}>
+                      <strong>{entryName}</strong>
+                      {entry.comment.length === 0 ? null : <span className={css.muted}>{entry.comment}</span>}
+                    </td>
+                    <td>
+                      {entry.keys.length === 0 ? (
+                        <span className={css.muted}>{t('entryNoKeys')}</span>
+                      ) : (
+                        <span className={css.wbKeys}>
+                          {entry.keys.map((key, keyIndex) => (
+                            <span key={keyIndex} className={css.wbKeyChip}>{key}</span>
+                          ))}
+                        </span>
+                      )}
+                    </td>
+                    <td className={css.wbContent}>{entry.content}</td>
+                    <td className={css.wbRowActions}>
+                      <button type="button" className={css.miniButton} disabled={busy} onClick={() => setWbEditing(editing ? null : entryName)}>
+                        {editing ? t('entryCancel') : t('entryEdit')}
+                      </button>
+                      <button type="button" className={css.miniDanger} disabled={busy} onClick={() => deleteEntry(book.id, entryName)}>
+                        {t('entryDelete')}
+                      </button>
+                    </td>
+                  </tr>
+                )
+              })}
               {entries.length === 0 ? (
-                <tr><td colSpan={4} className={css.wbEmpty}>{t('wbNoMatch')}</td></tr>
+                <tr><td colSpan={5} className={css.wbEmpty}>{t('wbNoMatch')}</td></tr>
               ) : null}
             </tbody>
           </table>
+          {wbEditing === null ? null : (
+            <EntryEditor
+              initial={wbEditing === '__new__' ? null : entries.find(entry => (entry.name.length > 0 ? entry.name : entry.comment) === wbEditing) ?? null}
+              onSave={(fields) => saveEntry(book.id, fields)}
+              onCancel={() => setWbEditing(null)}
+              busy={busy}
+            />
+          )}
         </div>
       )
     }
@@ -685,6 +1102,8 @@ export function NovelProjectExplorer({ useStore, actions, read, api, useSessions
     const { character } = selection
     const scripts = cardScripts(character.extensions)
     const enabledScripts = scripts.filter(script => script.enabled).length
+    const books = relatedWorldbooks(character)
+    const charEditorKey = `char-${character.id}`
     return (
       <div className={css.charEditor}>
         <div className={css.charHeader}>
@@ -701,28 +1120,73 @@ export function NovelProjectExplorer({ useStore, actions, read, api, useSessions
             </p>
           </div>
           <span className={css.paneHeaderSpacer} />
-          <button type="button" className={css.dangerButton} onClick={() => deleteCharacter(character.id, character.name)}>
-            {t('deleteCharacterAction')}
-          </button>
+          <div className={css.charActions}>
+            <select className={css.sessionSelect} aria-label={t('selectSession')} value={sessionId} onChange={event => setSessionId(event.target.value)}>
+              <option value="">{t('chooseSession')}</option>
+              {sessions.ids.map(id => (
+                <option key={id} value={id}>{sessions.byId[id]?.title ?? t('sessionTitle')}</option>
+              ))}
+            </select>
+            <button type="button" className={css.actionButton} disabled={busy || sessionId === ''} onClick={() => startChatWithCharacter(character)}>
+              {t('startChat')}
+            </button>
+            <button type="button" className={css.dangerButton} onClick={() => deleteCharacter(character.id, character.name)}>
+              {t('deleteCharacterAction')}
+            </button>
+          </div>
         </div>
-        <div className={css.charSections}>
+        <div className={css.charSections} key={charEditorKey}>
           <section className={css.charField}>
             <h5 className={css.detailTitle}>{t('charDescription')}</h5>
-            <p className={css.charFieldBody}>{character.description.length === 0 ? t('emptyField') : character.description}</p>
+            <textarea className={css.charEditArea} aria-label={t('charDescription')} defaultValue={character.description} rows={3} />
           </section>
           <section className={css.charField}>
             <h5 className={css.detailTitle}>{t('charPersonality')}</h5>
-            <p className={css.charFieldBody}>{character.personality.length === 0 ? t('emptyField') : character.personality}</p>
+            <textarea className={css.charEditArea} aria-label={t('charPersonality')} defaultValue={character.personality} rows={3} />
           </section>
           <section className={css.charField}>
             <h5 className={css.detailTitle}>{t('charScenario')}</h5>
-            <p className={css.charFieldBody}>{character.scenario.length === 0 ? t('emptyField') : character.scenario}</p>
+            <textarea className={css.charEditArea} aria-label={t('charScenario')} defaultValue={character.scenario} rows={3} />
           </section>
           <section className={css.charField}>
             <h5 className={css.detailTitle}>{t('charMesExample')}</h5>
-            <p className={css.charFieldBody}>{character.mesExample.length === 0 ? t('emptyField') : character.mesExample}</p>
+            <textarea className={css.charEditArea} aria-label={t('charMesExample')} defaultValue={character.mesExample} rows={3} />
           </section>
         </div>
+        <button
+          type="button"
+          className={css.actionButton}
+          disabled={busy}
+          onClick={event => {
+            const fields = {} as { name?: string; description?: string; personality?: string; scenario?: string; mesExample?: string }
+            const sections = (event.target as HTMLButtonElement).parentElement?.querySelectorAll('[class*="charField"]')
+            sections?.forEach(section => {
+              const label = section.querySelector('h5')?.textContent ?? ''
+              const textarea = section.querySelector('textarea')
+              if (label.includes(t('charDescription'))) fields.description = textarea?.value ?? ''
+              if (label.includes(t('charPersonality'))) fields.personality = textarea?.value ?? ''
+              if (label.includes(t('charScenario'))) fields.scenario = textarea?.value ?? ''
+              if (label.includes(t('charMesExample'))) fields.mesExample = textarea?.value ?? ''
+            })
+            updateCharacterFields(character, fields)
+          }}
+        >
+          {t('characterSave')}
+        </button>
+        {books.length === 0 ? null : (
+          <section className={css.charGreetings}>
+            <h5 className={css.detailTitle}>{t('relatedWorldbooks')}</h5>
+            <ul className={css.homeList}>
+              {books.map(book => (
+                <li key={book.id} className={css.detailItem}>
+                  <strong>{book.name}</strong>
+                  <span className={css.muted}>{t('entryCount', { count: book.entries.length })}</span>
+                  <span className={css.badgeKind}>{t('relatedAuto')}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
         {character.greetings.length === 0 ? null : (
           <section className={css.charGreetings}>
             <h5 className={css.detailTitle}>{t('charGreetings')}</h5>
@@ -811,67 +1275,64 @@ export function NovelProjectExplorer({ useStore, actions, read, api, useSessions
       )}
       {mode === 'tavern' && tavernView === 'chat' ? (
         <TavernChat api={api} t={t} useSessions={useSessions} onNeedLibrary={() => setTavernView('library')} focusSession={focusSession} />
-      ) : (
+      ) : mode === 'novel' ? (
         <div className={css.body}>
           <nav className={css.tree} aria-label={t('explorerTree')}>
-            {mode === 'novel' ? (
-              <>
-                <button type="button" className={css.treeGroupTitle} onClick={() => setSelection({ type: 'novel', section: '' })}>
-                  <span className={css.treeMarker}>🖋</span>{t('tab')}
-                </button>
-                {novelSections.map(section => (
-                  <button key={section.key} type="button" className={css.treeItem} onClick={() => setSelection({ type: 'novel', section: section.key })}>
-                    <span className={css.treeCount}>{section.count}</span>{section.label}
-                  </button>
-                ))}
-              </>
-            ) : (
-              <>
-                <div className={css.treeGroupTitle}><span className={css.treeMarker}>🍺</span>{t('tavernTab')}</div>
-                <button
-                  type="button"
-                  className={selection.type === 'root' ? `${css.treeItem} ${css.treeItemActive}` : css.treeItem}
-                  onClick={() => setSelection({ type: 'root' })}
-                >
-                  <span className={css.treeMarker}>🏠</span>
-                  <span className={css.treeLabel}>{t('libraryHome')}</span>
-                </button>
-                {tree === null ? null : (
-                  <>
-                    {tree.worldbooks.map(book => (
-                      <div key={book.id}>
-                        <button type="button" className={css.treeItem} onClick={() => {
-                          const next = new Set(expandedBooks)
-                          if (next.has(book.id)) next.delete(book.id)
-                          else next.add(book.id)
-                          setExpandedBooks(next)
-                          setSelection({ type: 'worldbook', book })
-                        }}>
-                          <span className={css.treeMarker}>{expandedBooks.has(book.id) ? '▾' : '▸'}</span>
-                          <span className={css.treeLabel}>{book.name}</span>
-                          <span className={css.treeCount}>{book.entries.length}</span>
-                        </button>
-                      </div>
-                    ))}
-                    {tree.characters.map(character => (
-                      <button
-                        key={character.id}
-                        type="button"
-                        className={selection.type === 'character' && selection.character.id === character.id ? `${css.treeItem} ${css.treeItemActive}` : css.treeItem}
-                        onClick={() => selectCharacter(character)}
-                      >
-                        <span className={css.treeMarker}>🧑</span>
-                        <span className={css.treeLabel}>{character.name}</span>
-                        <span className={css.treeCount}>{character.format}</span>
-                      </button>
-                    ))}
-                  </>
-                )}
-              </>
-            )}
+            <button type="button" className={css.treeGroupTitle} onClick={() => setSelection({ type: 'novel', section: '' })}>
+              <span className={css.treeMarker}>🖋</span>{t('tab')}
+            </button>
+            {novelSections.map(section => (
+              <button key={section.key} type="button" className={css.treeItem} onClick={() => setSelection({ type: 'novel', section: section.key })}>
+                <span className={css.treeCount}>{section.count}</span>{section.label}
+              </button>
+            ))}
           </nav>
           <section className={css.detail} aria-label={t('explorerDetail')}>
-            {mode === 'novel' ? renderNovelDetail() : renderTavernDetail()}
+            {renderNovelDetail()}
+          </section>
+        </div>
+      ) : (
+        <div className={css.body3}>
+          {/* Column 1: the section rail, top to bottom. */}
+          <nav className={css.rail} aria-label={t('libraryRail')}>
+            <button
+              type="button"
+              className={rail === 'characters' ? `${css.railItem} ${css.railItemActive}` : css.railItem}
+              title={t('railCharacters')}
+              onClick={() => { setRail('characters'); setSelection({ type: 'root' }) }}
+            >🎭<span className={css.railLabel}>{t('railCharacters')}</span></button>
+            <button
+              type="button"
+              className={rail === 'worldbooks' ? `${css.railItem} ${css.railItemActive}` : css.railItem}
+              title={t('railWorldbooks')}
+              onClick={() => { setRail('worldbooks'); setSelection({ type: 'root' }) }}
+            >📚<span className={css.railLabel}>{t('railWorldbooks')}</span></button>
+            <button
+              type="button"
+              className={rail === 'scripts' ? `${css.railItem} ${css.railItemActive}` : css.railItem}
+              title={t('railScripts')}
+              onClick={() => { setRail('scripts'); setSelection({ type: 'root' }) }}
+            >🧩<span className={css.railLabel}>{t('railScripts')}</span></button>
+            <button
+              type="button"
+              className={rail === 'presets' ? `${css.railItem} ${css.railItemActive}` : css.railItem}
+              title={t('railPresets')}
+              onClick={() => { setRail('presets'); setSelection({ type: 'root' }) }}
+            >📋<span className={css.railLabel}>{t('railPresets')}</span></button>
+            <button
+              type="button"
+              className={rail === 'settings' ? `${css.railItem} ${css.railItemActive}` : css.railItem}
+              title={t('railSettings')}
+              onClick={() => { setRail('settings'); setSelection({ type: 'root' }) }}
+            >⚙️<span className={css.railLabel}>{t('railSettings')}</span></button>
+          </nav>
+          {/* Column 2: the section list. */}
+          <section className={css.railList} aria-label={t('libraryList')}>
+            {renderRailList()}
+          </section>
+          {/* Column 3: the detail / editor. */}
+          <section className={css.detail3} aria-label={t('explorerDetail')}>
+            {renderTavernDetail()}
           </section>
         </div>
       )}

@@ -60,6 +60,9 @@ import {
   tavernSetMvuValueSchema,
   tavernSetPersonaValueSchema,
   tavernImportChatValueSchema,
+  tavernSaveJailbreakValueSchema,
+  tavernListJailbreaksValueSchema,
+  tavernDeleteJailbreakValueSchema,
   tavernScoreCharacterValueSchema,
   tavernProjectTreeValueSchema,
   tavernCharacterImageValueSchema,
@@ -67,6 +70,10 @@ import {
   tavernDeleteWorldBookValueSchema,
   tavernSetWorldBookEntryEnabledValueSchema,
   tavernImportCharacterValueSchema,
+  tavernUpdateCharacterValueSchema,
+  tavernUpdateCharacterScriptsValueSchema,
+  tavernSaveWorldBookEntryValueSchema,
+  tavernDeleteWorldBookEntryValueSchema,
   tavernImportWorldBookValueSchema,
   tavernImportPromptPresetValueSchema,
   tavernListPromptPresetsValueSchema,
@@ -180,6 +187,10 @@ export interface IApiClient {
     setWorldBookEntryEnabled(payload: RequestPayload<'tavern.setWorldBookEntryEnabled'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'tavern.setWorldBookEntryEnabled'>>>
     listCharacters(payload: RequestPayload<'tavern.listCharacters'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'tavern.listCharacters'>>>
     importCharacter(payload: RequestPayload<'tavern.importCharacter'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'tavern.importCharacter'>>>
+    updateCharacter(payload: RequestPayload<'tavern.updateCharacter'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'tavern.updateCharacter'>>>
+    updateCharacterScripts(payload: RequestPayload<'tavern.updateCharacterScripts'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'tavern.updateCharacterScripts'>>>
+    saveWorldBookEntry(payload: RequestPayload<'tavern.saveWorldBookEntry'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'tavern.saveWorldBookEntry'>>>
+    deleteWorldBookEntry(payload: RequestPayload<'tavern.deleteWorldBookEntry'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'tavern.deleteWorldBookEntry'>>>
     deleteCharacter(payload: RequestPayload<'tavern.deleteCharacter'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'tavern.deleteCharacter'>>>
     binding(payload: RequestPayload<'tavern.binding'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'tavern.binding'>>>
     setBinding(payload: RequestPayload<'tavern.setBinding'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'tavern.setBinding'>>>
@@ -192,6 +203,9 @@ export interface IApiClient {
     setMvu(payload: RequestPayload<'tavern.setMvu'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'tavern.setMvu'>>>
     setPersona(payload: RequestPayload<'tavern.setPersona'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'tavern.setPersona'>>>
     importChat(payload: RequestPayload<'tavern.importChat'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'tavern.importChat'>>>
+    saveJailbreak(payload: RequestPayload<'tavern.saveJailbreak'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'tavern.saveJailbreak'>>>
+    listJailbreaks(payload: RequestPayload<'tavern.listJailbreaks'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'tavern.listJailbreaks'>>>
+    deleteJailbreak(payload: RequestPayload<'tavern.deleteJailbreak'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'tavern.deleteJailbreak'>>>
     scoreCharacter(payload: RequestPayload<'tavern.scoreCharacter'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'tavern.scoreCharacter'>>>
     projectTree(payload: RequestPayload<'tavern.projectTree'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'tavern.projectTree'>>>
     characterImage(payload: RequestPayload<'tavern.characterImage'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'tavern.characterImage'>>>
@@ -272,6 +286,10 @@ const UNARY_VALUE_SCHEMAS: { [K in keyof RpcMethodMap]: z.ZodType<Wire<ResponseV
   'tavern.setWorldBookEntryEnabled': tavernSetWorldBookEntryEnabledValueSchema,
   'tavern.listCharacters': tavernListCharactersValueSchema,
   'tavern.importCharacter': tavernImportCharacterValueSchema,
+  'tavern.updateCharacter': tavernUpdateCharacterValueSchema,
+  'tavern.updateCharacterScripts': tavernUpdateCharacterScriptsValueSchema,
+  'tavern.saveWorldBookEntry': tavernSaveWorldBookEntryValueSchema,
+  'tavern.deleteWorldBookEntry': tavernDeleteWorldBookEntryValueSchema,
   'tavern.deleteCharacter': tavernDeleteCharacterValueSchema,
   'tavern.binding': tavernBindingValueSchema,
   'tavern.setBinding': tavernSetBindingValueSchema,
@@ -284,6 +302,9 @@ const UNARY_VALUE_SCHEMAS: { [K in keyof RpcMethodMap]: z.ZodType<Wire<ResponseV
   'tavern.setMvu': tavernSetMvuValueSchema,
   'tavern.setPersona': tavernSetPersonaValueSchema,
   'tavern.importChat': tavernImportChatValueSchema,
+  'tavern.saveJailbreak': tavernSaveJailbreakValueSchema,
+  'tavern.listJailbreaks': tavernListJailbreaksValueSchema,
+  'tavern.deleteJailbreak': tavernDeleteJailbreakValueSchema,
   'tavern.scoreCharacter': tavernScoreCharacterValueSchema,
   'tavern.projectTree': tavernProjectTreeValueSchema,
   'tavern.characterImage': tavernCharacterImageValueSchema,
@@ -566,6 +587,10 @@ export abstract class AbstractApiClient implements IApiClient {
     setWorldBookEntryEnabled: (payload, signal) => this.callUnary('tavern.setWorldBookEntryEnabled', payload, signal),
     listCharacters: (payload, signal) => this.callUnary('tavern.listCharacters', payload, signal),
     importCharacter: (payload, signal) => this.callUnary('tavern.importCharacter', payload, signal),
+    updateCharacter: (payload, signal) => this.callUnary('tavern.updateCharacter', payload, signal),
+    updateCharacterScripts: (payload, signal) => this.callUnary('tavern.updateCharacterScripts', payload, signal),
+    saveWorldBookEntry: (payload, signal) => this.callUnary('tavern.saveWorldBookEntry', payload, signal),
+    deleteWorldBookEntry: (payload, signal) => this.callUnary('tavern.deleteWorldBookEntry', payload, signal),
     deleteCharacter: (payload, signal) => this.callUnary('tavern.deleteCharacter', payload, signal),
     binding: (payload, signal) => this.callUnary('tavern.binding', payload, signal),
     setBinding: (payload, signal) => this.callUnary('tavern.setBinding', payload, signal),
@@ -578,6 +603,9 @@ export abstract class AbstractApiClient implements IApiClient {
     setMvu: (payload, signal) => this.callUnary('tavern.setMvu', payload, signal),
     setPersona: (payload, signal) => this.callUnary('tavern.setPersona', payload, signal),
     importChat: (payload, signal) => this.callUnary('tavern.importChat', payload, signal),
+    saveJailbreak: (payload, signal) => this.callUnary('tavern.saveJailbreak', payload, signal),
+    listJailbreaks: (payload, signal) => this.callUnary('tavern.listJailbreaks', payload, signal),
+    deleteJailbreak: (payload, signal) => this.callUnary('tavern.deleteJailbreak', payload, signal),
     scoreCharacter: (payload, signal) => this.callUnary('tavern.scoreCharacter', payload, signal),
     projectTree: (payload, signal) => this.callUnary('tavern.projectTree', payload, signal),
     characterImage: (payload, signal) => this.callUnary('tavern.characterImage', payload, signal),

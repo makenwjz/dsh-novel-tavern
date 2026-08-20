@@ -237,12 +237,17 @@ export function renderTavernSection(input: {
   mvuVariables?: Readonly<Record<string, string>>
   preset?: { readonly name: string; readonly sections: readonly PresetSection[] } | null
   persona?: string
+  jailbreak?: string
 }): string {
   const lean = input.lean === true
   const persona = input.persona === undefined || input.persona.trim().length === 0 ? '' : input.persona.trim()
   const personaBlock = persona.length === 0
     ? ''
     : '\n## 用户设定（{{user}} 的 Persona）\n' + persona + '\n'
+  const jailbreak = input.jailbreak === undefined || input.jailbreak.trim().length === 0 ? '' : input.jailbreak.trim()
+  const jailbreakBlock = jailbreak.length === 0
+    ? ''
+    : '## 系统指令（破限）\n' + jailbreak + '\n\n'
   const entries = input.activated.filter(item => item.entry.content.length > 0)
   const loreBlock = entries.length === 0
     ? ''
@@ -250,13 +255,13 @@ export function renderTavernSection(input: {
       + entries.map(item => `- 《${item.bookName}》：${item.entry.content}`).join('\n')
       + '\n'
   if (input.preset !== null && input.preset !== undefined) {
-    return renderPresetSection(input.preset, input.characters, loreBlock, persona)
+    return jailbreakBlock + renderPresetSection(input.preset, input.characters, loreBlock, persona)
   }
-  if (input.binding.mode === 'novel' || input.characters.length === 0) return loreBlock + personaBlock
+  if (input.binding.mode === 'novel' || input.characters.length === 0) return jailbreakBlock + loreBlock + personaBlock
   const substituted = input.characters.map(character => substituteProfile(character))
   if (substituted.length === 1) {
-    return fullCharacterBlock(substituted[0]!, lean, loreBlock, input.openingPresent === true, input.mvuVariables) + personaBlock
+    return jailbreakBlock + fullCharacterBlock(substituted[0]!, lean, loreBlock, input.openingPresent === true, input.mvuVariables) + personaBlock
   }
   const blocks = substituted.map(character => extraCharacterBlock(character))
-  return `${blocks.join('\n')}\n${loreBlock}${personaBlock}`
+  return `${jailbreakBlock}${blocks.join('\n')}\n${loreBlock}${personaBlock}`
 }

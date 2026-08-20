@@ -10,7 +10,7 @@
  */
 
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import type { CardScore, CharacterId, PromptPresetId, PromptPresetView, TavernBindingData, WorldBookId } from '@deepseek-ai/dsh-tavern/types'
+import type { CardScore, CharacterId, JailbreakId, JailbreakPreset, PromptPresetId, PromptPresetView, TavernBindingData, WorldBookId } from '@deepseek-ai/dsh-tavern/types'
 import type { RpcRequest, RpcResponse } from './rpc.ts'
 
 /** One lorebook list row: the store view minus the entry bodies. */
@@ -64,6 +64,21 @@ export interface TavernApi {
   /** Import one character card: JSON text or PNG bytes (`chara`/`ccv3` text chunk). */
   importCharacter(request: RpcRequest<{ fileName: string; bytesB64: string }>):
   Promise<RpcResponse<{ character: TavernCharacterView }>>
+
+  /** Update one character card's editor fields (sidecar override). */
+  updateCharacter(request: RpcRequest<{ id: CharacterId; name?: string; description?: string; personality?: string; scenario?: string; mesExample?: string }>):
+  Promise<RpcResponse<{ character: TavernCharacterView }>>
+
+  /** Update one character card's regex scripts (sidecar override). */
+  updateCharacterScripts(request: RpcRequest<{ id: CharacterId; overrides: Array<{ name: string; enabled?: boolean; findRegex?: string; replaceString?: string }> }>):
+  Promise<RpcResponse<{ scripts: Array<{ name: string; enabled: boolean; findRegex: string; replaceString: string }> }>>
+
+  /** Add or update one worldbook entry in the stored file. */
+  saveWorldBookEntry(request: RpcRequest<{ id: WorldBookId; name: string; keys?: string[]; content?: string; comment?: string; enabled?: boolean }>):
+  Promise<RpcResponse<{ updated: true }>>
+
+  /** Delete one worldbook entry from the stored file. */
+  deleteWorldBookEntry(request: RpcRequest<{ id: WorldBookId; name: string }>): Promise<RpcResponse<{ deleted: true }>>
 
   /** Delete a character card, failing loud while any session's binding references it. */
   deleteCharacter(request: RpcRequest<{ id: CharacterId }>): Promise<RpcResponse<{ deleted: true }>>
@@ -133,6 +148,18 @@ export interface TavernApi {
    * @returns how many messages were imported.
    */
   importChat(request: RpcRequest<{ sessionId: SessionId; content: string }>): Promise<RpcResponse<{ imported: number }>>
+
+  /**
+   * Create or update one AI-jailbreak preset (破限).
+   * @returns the stored preset.
+   */
+  saveJailbreak(request: RpcRequest<{ id?: JailbreakId; name: string; content: string }>): Promise<RpcResponse<{ jailbreak: JailbreakPreset }>>
+
+  /** Every jailbreak preset, in name order. */
+  listJailbreaks(request: RpcRequest<{}>): Promise<RpcResponse<{ jailbreaks: JailbreakPreset[] }>>
+
+  /** Delete a jailbreak preset, failing loud while any session binds it. */
+  deleteJailbreak(request: RpcRequest<{ id: JailbreakId }>): Promise<RpcResponse<{ deleted: true }>>
 
   /**
    * Model-assess one character card's quality through the LLM service.

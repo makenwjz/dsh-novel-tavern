@@ -32,6 +32,7 @@ const bindingWireSchema = z.object({
   mvuVariables: z.record(z.string(), z.string()).optional(),
   presetId: z.string().optional(),
   persona: z.string().optional(),
+  jailbreakId: z.string().optional(),
 })
 
 /** tavern.listWorldBooks request payload (none). */
@@ -130,6 +131,63 @@ export const tavernImportCharacterRequestSchema = z.object({
 export const tavernImportCharacterValueSchema = z.object({
   character: characterViewSchema,
 }) as unknown as z.ZodType<Wire<ResponseValue<'tavern.importCharacter'>>>
+
+/** tavern.updateCharacter request payload. */
+export const tavernUpdateCharacterRequestSchema = z.object({
+  id: z.string(),
+  name: z.string().optional(),
+  description: z.string().optional(),
+  personality: z.string().optional(),
+  scenario: z.string().optional(),
+  mesExample: z.string().optional(),
+}) as unknown as z.ZodType<Wire<RequestPayload<'tavern.updateCharacter'>>>
+
+/** tavern.updateCharacter response value. */
+export const tavernUpdateCharacterValueSchema = z.object({
+  character: characterViewSchema,
+}) as unknown as z.ZodType<Wire<ResponseValue<'tavern.updateCharacter'>>>
+
+/** tavern.updateCharacterScripts request payload. */
+export const tavernUpdateCharacterScriptsRequestSchema = z.object({
+  id: z.string(),
+  overrides: z.array(z.object({
+    name: z.string(),
+    enabled: z.boolean().optional(),
+    findRegex: z.string().optional(),
+    replaceString: z.string().optional(),
+  })),
+}) as unknown as z.ZodType<Wire<RequestPayload<'tavern.updateCharacterScripts'>>>
+
+/** tavern.updateCharacterScripts response value. */
+export const tavernUpdateCharacterScriptsValueSchema = z.object({
+  scripts: z.array(z.object({ name: z.string(), enabled: z.boolean(), findRegex: z.string(), replaceString: z.string() })),
+}) as unknown as z.ZodType<Wire<ResponseValue<'tavern.updateCharacterScripts'>>>
+
+/** tavern.saveWorldBookEntry request payload. */
+export const tavernSaveWorldBookEntryRequestSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  keys: z.array(z.string()).optional(),
+  content: z.string().optional(),
+  comment: z.string().optional(),
+  enabled: z.boolean().optional(),
+}) as unknown as z.ZodType<Wire<RequestPayload<'tavern.saveWorldBookEntry'>>>
+
+/** tavern.saveWorldBookEntry response value. */
+export const tavernSaveWorldBookEntryValueSchema = z.object({
+  updated: z.literal(true),
+}) as unknown as z.ZodType<Wire<ResponseValue<'tavern.saveWorldBookEntry'>>>
+
+/** tavern.deleteWorldBookEntry request payload. */
+export const tavernDeleteWorldBookEntryRequestSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+}) as unknown as z.ZodType<Wire<RequestPayload<'tavern.deleteWorldBookEntry'>>>
+
+/** tavern.deleteWorldBookEntry response value. */
+export const tavernDeleteWorldBookEntryValueSchema = z.object({
+  deleted: z.literal(true),
+}) as unknown as z.ZodType<Wire<ResponseValue<'tavern.deleteWorldBookEntry'>>>
 
 /** tavern.deleteCharacter request payload. */
 export const tavernDeleteCharacterRequestSchema = z.object({
@@ -257,6 +315,36 @@ export const tavernImportChatRequestSchema = z.object({
 export const tavernImportChatValueSchema = z.object({
   imported: z.number().int().min(0),
 }) as unknown as z.ZodType<Wire<ResponseValue<'tavern.importChat'>>>
+
+/** tavern.saveJailbreak request payload. */
+export const tavernSaveJailbreakRequestSchema = z.object({
+  id: z.string().optional(),
+  name: z.string(),
+  content: z.string(),
+}) as unknown as z.ZodType<Wire<RequestPayload<'tavern.saveJailbreak'>>>
+
+/** tavern.saveJailbreak response value. */
+export const tavernSaveJailbreakValueSchema = z.object({
+  jailbreak: z.object({ id: z.string(), name: z.string(), content: z.string() }),
+}) as unknown as z.ZodType<Wire<ResponseValue<'tavern.saveJailbreak'>>>
+
+/** tavern.listJailbreaks response value. */
+export const tavernListJailbreaksValueSchema = z.object({
+  jailbreaks: z.array(z.object({ id: z.string(), name: z.string(), content: z.string() })),
+}) as unknown as z.ZodType<Wire<ResponseValue<'tavern.listJailbreaks'>>>
+
+/** tavern.listJailbreaks request payload (none). */
+export const tavernListJailbreaksRequestSchema = z.object({}) as unknown as z.ZodType<Wire<RequestPayload<'tavern.listJailbreaks'>>>
+
+/** tavern.deleteJailbreak request payload. */
+export const tavernDeleteJailbreakRequestSchema = z.object({
+  id: z.string(),
+}) as unknown as z.ZodType<Wire<RequestPayload<'tavern.deleteJailbreak'>>>
+
+/** tavern.deleteJailbreak response value. */
+export const tavernDeleteJailbreakValueSchema = z.object({
+  deleted: z.literal(true),
+}) as unknown as z.ZodType<Wire<ResponseValue<'tavern.deleteJailbreak'>>>
 
 /** tavern.scoreCharacter request payload. */
 export const tavernScoreCharacterRequestSchema = z.object({

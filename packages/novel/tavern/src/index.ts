@@ -33,6 +33,8 @@ import type {
   CharacterProfile,
   CharacterView,
   DanglingBinding,
+  JailbreakId,
+  JailbreakPreset,
   Lorebook,
   PromptPreset,
   PromptPresetId,
@@ -107,10 +109,11 @@ function parseScore(text: string): CardScore {
 }
 
 /** The stored-file extensions of one collection. */
-const STORE_EXTENSIONS: Record<'worldbooks' | 'characters' | 'presets', string[]> = {
+const STORE_EXTENSIONS: Record<'worldbooks' | 'characters' | 'presets' | 'jailbreaks' | 'jailbreaks', string[]> = {
   worldbooks: ['json'],
   characters: ['json', 'png'],
   presets: ['json'],
+  jailbreaks: ['json'],
 }
 
 declare module '@deepseek-ai/cordis' {
@@ -188,6 +191,7 @@ export class TavernService extends Service {
     mkdirSync(join(this.root, 'worldbooks'), { recursive: true })
     mkdirSync(join(this.root, 'characters'), { recursive: true })
     mkdirSync(join(this.root, 'presets'), { recursive: true })
+    mkdirSync(join(this.root, 'jailbreaks'), { recursive: true })
     ctx.systemPrompt.section({
       name: 'tavern:context',
       order: 40,
@@ -210,6 +214,7 @@ export class TavernService extends Service {
             ...(binding.mvuVariables === undefined ? {} : { mvuVariables: binding.mvuVariables }),
             ...(binding.presetId === undefined ? {} : { preset: this.promptPreset(binding.presetId) }),
             ...(binding.persona === undefined ? {} : { persona: binding.persona }),
+            ...(binding.jailbreakId === undefined ? {} : { jailbreak: this.jailbreakFor(binding.jailbreakId) }),
           })
           // The card's prompt-side regex scripts hide variable machinery from
           // the model (e.g. "变量更新对AI不可见") and trim repetitive text.
@@ -313,6 +318,51 @@ export class TavernService extends Service {
     }
   }
 
+  /** The prompt text of one jailbreak preset (empty when missing). */
+  private jailbreakFor(id: JailbreakId): string {
+    const found = this.listJailbreaks().find(preset => preset.id === id)
+    return found?.content ?? ''
+  }
+
+  /**
+   * Create or update one AI-jailbreak preset (破限): a user-authored prompt
+   * injected ahead of the character block to relax the model's guardrails.
+   * @param id - the preset id to update, or undefined to create.
+   * @param name - the display name.
+   * @param content - the prompt text.
+   * @returns the stored preset.
+   * @throws when the name is blank, or the id is unknown.
+   */
+  saveJailbreak(id: JailbreakId | undefined, name: string, content: string): JailbreakPreset {
+    const title = name.trim()
+    if (title.length === 0) throw new Error('tavern: jailbreak name must not be empty')
+    const text = content.trim()
+    const targetId = id ?? mintId('jailbreak' as never) as JailbreakId
+    writeFileSync(join(this.root, 'jailbreaks', `${targetId}.json`), JSON.stringify({ id: targetId, name: title, content: text }, null, 2), 'utf-8')
+    return { id: targetId, name: title, content: text }
+  }
+
+  /** Every jailbreak preset, ordered by name. */
+  listJailbreaks(): JailbreakPreset[] {
+    return this.scanStore<JailbreakPreset>('jailbreaks', 'json', (file, id) => {
+      const parsed = JSON.parse(readFileSync(file, 'utf-8')) as Record<string, unknown>
+      return {
+        id: id as JailbreakId,
+        name: typeof parsed.name === 'string' ? parsed.name : '未命名破限',
+        content: typeof parsed.content === 'string' ? parsed.content : '',
+      }
+    })
+  }
+
+  /**
+   * Delete one jailbreak preset. Sessions whose binding still references it
+   * block the delete.
+   * @param id - the jailbreak id.
+   */
+  deleteJailbreak(id: JailbreakId): void {
+    this.deleteFile('jailbreaks', 'jailbreak', id)
+  }
+
   /**
    * Import one character card.
    * @param fileName - the original file name; `.png` (any case) selects the
@@ -400,6 +450,65 @@ export class TavernService extends Service {
   }
 
   /**
+   * Add or update one worldbook entry in the stored file. An entry whose name
+   * (or comment fallback) matches an existing row updates it; otherwise a new
+   * row is appended.
+   * @param id - the worldbook id.
+   * @param entry - the entry fields; omitted fields keep their values on update.
+   * @returns true when the entry was written.
+   * @throws when the worldbook is missing or the name is blank.
+   */
+  saveWorldBookEntry(id: WorldBookId, entry: { name: string; keys?: string[]; content?: string; comment?: string; enabled?: boolean }): boolean {
+    validateId('worldbook', id)
+    const file = join(this.root, 'worldbooks', `${id}.json`)
+    if (!existsSync(file)) throw new Error(`tavern: worldbook ${JSON.stringify(id)} not found`)
+    const raw = JSON.parse(readFileSync(file, 'utf-8')) as { entries?: Array<Record<string, unknown>> }
+    if (!Array.isArray(raw.entries)) throw new Error(`tavern: worldbook ${JSON.stringify(id)} has no entries array`)
+    const name = entry.name.trim()
+    if (name.length === 0) throw new Error('tavern: entry name must not be empty')
+    const existing = raw.entries.find(row => row?.name === name || (row?.name === undefined && row?.comment === name))
+    const patch: Record<string, unknown> = {}
+    if (entry.keys !== undefined) patch.keys = [...entry.keys]
+    if (entry.content !== undefined) patch.content = entry.content
+    if (entry.comment !== undefined) patch.comment = entry.comment
+    if (entry.enabled !== undefined) patch.enabled = entry.enabled
+    if (existing !== undefined) {
+      Object.assign(existing, patch)
+    } else {
+      raw.entries.push({
+        name,
+        keys: entry.keys ?? [],
+        content: entry.content ?? '',
+        comment: entry.comment ?? '',
+        enabled: entry.enabled ?? true,
+        ...patch,
+      })
+    }
+    writeFileSync(file, JSON.stringify(raw, null, 2))
+    return true
+  }
+
+  /**
+   * Delete one worldbook entry from the stored file.
+   * @param id - the worldbook id.
+   * @param name - the entry's display name (or comment fallback).
+   * @returns true when the entry was removed.
+   * @throws when the worldbook or entry is missing.
+   */
+  deleteWorldBookEntry(id: WorldBookId, name: string): boolean {
+    validateId('worldbook', id)
+    const file = join(this.root, 'worldbooks', `${id}.json`)
+    if (!existsSync(file)) throw new Error(`tavern: worldbook ${JSON.stringify(id)} not found`)
+    const raw = JSON.parse(readFileSync(file, 'utf-8')) as { entries?: Array<Record<string, unknown>> }
+    if (!Array.isArray(raw.entries)) throw new Error(`tavern: worldbook ${JSON.stringify(id)} has no entries array`)
+    const before = raw.entries.length
+    raw.entries = raw.entries.filter(row => !(row?.name === name || (row?.name === undefined && row?.comment === name)))
+    if (raw.entries.length === before) throw new Error(`tavern: worldbook ${JSON.stringify(id)} has no entry named ${JSON.stringify(name)}`)
+    writeFileSync(file, JSON.stringify(raw, null, 2))
+    return true
+  }
+
+  /**
    * Load one character card.
    * @param id - the character id.
    * @returns the projected profile.
@@ -408,7 +517,145 @@ export class TavernService extends Service {
     validateId('character', id)
     const file = this.storeFile('characters', 'character', id)
     if (file === undefined) throw new Error(`tavern: character ${JSON.stringify(id)} not found`)
-    return this.characterFile(file, file.endsWith('.png') ? 'png' : 'json')
+    const profile = this.characterFile(file, file.endsWith('.png') ? 'png' : 'json')
+    // Editor overrides (written by updateCharacter) take precedence, so the
+    // card file itself stays untouched — PNG cards never get re-encoded.
+    const override = this.characterOverride(id)
+    if (override === null) return profile
+    return {
+      ...profile,
+      name: override.name ?? profile.name,
+      description: override.description ?? profile.description,
+      personality: override.personality ?? profile.personality,
+      scenario: override.scenario ?? profile.scenario,
+      mesExample: override.mesExample ?? profile.mesExample,
+    }
+  }
+
+  /** The editor override file of one card, or null when none was written. */
+  private characterOverride(id: CharacterId): {
+    name?: string
+    description?: string
+    personality?: string
+    scenario?: string
+    mesExample?: string
+    scriptOverrides?: Record<string, { enabled?: boolean; findRegex?: string; replaceString?: string; markdownOnly?: boolean; promptOnly?: boolean }>
+  } | null {
+    const file = join(this.root, 'characters', `${id}.override.json`)
+    if (!existsSync(file)) return null
+    try {
+      const parsed = JSON.parse(readFileSync(file, 'utf-8')) as Record<string, unknown>
+      const scripts = parsed.scriptOverrides
+      return {
+        ...(typeof parsed.name === 'string' ? { name: parsed.name } : {}),
+        ...(typeof parsed.description === 'string' ? { description: parsed.description } : {}),
+        ...(typeof parsed.personality === 'string' ? { personality: parsed.personality } : {}),
+        ...(typeof parsed.scenario === 'string' ? { scenario: parsed.scenario } : {}),
+        ...(typeof parsed.mesExample === 'string' ? { mesExample: parsed.mesExample } : {}),
+        ...(typeof scripts === 'object' && scripts !== null && !Array.isArray(scripts) ? { scriptOverrides: scripts as Record<string, { enabled?: boolean; findRegex?: string; replaceString?: string; markdownOnly?: boolean; promptOnly?: boolean }> } : {}),
+      }
+    } catch {
+      return null
+    }
+  }
+
+  /** The card's raw extensions with any script overrides merged in, so the
+   *  editor's regex tweaks flow into rendering and prompt injection alike. */
+  private mergedExtensions(id: CharacterId, format: 'json' | 'png'): Record<string, unknown> {
+    const extensions = this.characterExtensions(id, format)
+    const override = this.characterOverride(id)
+    if (override === null || override.scriptOverrides === undefined) return extensions
+    const regexes = extensions.regex_scripts
+    if (!Array.isArray(regexes)) return extensions
+    const merged = regexes.map((item) => {
+      if (typeof item !== 'object' || item === null) return item
+      const row = item as Record<string, unknown>
+      const name = typeof row.scriptName === 'string' ? row.scriptName : ''
+      const patch = override.scriptOverrides?.[name]
+      if (patch === undefined) return item
+      return {
+        ...row,
+        ...(patch.enabled === undefined ? {} : { disabled: !patch.enabled }),
+        ...(patch.findRegex === undefined ? {} : { findRegex: patch.findRegex }),
+        ...(patch.replaceString === undefined ? {} : { replaceString: patch.replaceString }),
+        ...(patch.markdownOnly === undefined ? {} : { markdownOnly: patch.markdownOnly }),
+        ...(patch.promptOnly === undefined ? {} : { promptOnly: patch.promptOnly }),
+      }
+    })
+    return { ...extensions, regex_scripts: merged }
+  }
+
+  /**
+   * Update one character card's regex scripts (enabled flag, find/replace
+   * strings). Overrides are stored in the sidecar file and merged at use time.
+   * @param id - the character card.
+   * @param overrides - per-script patches keyed by script name.
+   * @returns the updated script list (name, enabled, findRegex, replaceString).
+   */
+  updateCharacterScripts(
+    id: CharacterId,
+    overrides: Array<{ name: string; enabled?: boolean; findRegex?: string; replaceString?: string }>,
+  ): Array<{ name: string; enabled: boolean; findRegex: string; replaceString: string }> {
+    validateId('character', id)
+    const file = this.storeFile('characters', 'character', id)
+    if (file === undefined) throw new Error(`tavern: character ${JSON.stringify(id)} not found`)
+    const base = this.characterOverride(id) ?? {}
+    const next = {
+      ...base,
+      scriptOverrides: {
+        ...(base.scriptOverrides ?? {}),
+        ...Object.fromEntries(overrides
+          .filter(patch => patch.name.trim().length > 0)
+          .map(patch => [patch.name.trim(), {
+            ...(patch.enabled === undefined ? {} : { enabled: patch.enabled }),
+            ...(patch.findRegex === undefined ? {} : { findRegex: patch.findRegex }),
+            ...(patch.replaceString === undefined ? {} : { replaceString: patch.replaceString }),
+          }])),
+      },
+    }
+    writeFileSync(join(this.root, 'characters', `${id}.override.json`), JSON.stringify(next, null, 2), 'utf-8')
+    const format = file.endsWith('.png') ? 'png' : 'json'
+    const extensions = this.mergedExtensions(id, format)
+    const regexes = extensions.regex_scripts
+    if (!Array.isArray(regexes)) return []
+    return regexes.map((item) => {
+      if (typeof item !== 'object' || item === null) return { name: '', enabled: false, findRegex: '', replaceString: '' }
+      const row = item as Record<string, unknown>
+      return {
+        name: typeof row.scriptName === 'string' ? row.scriptName : '',
+        enabled: row.disabled !== true,
+        findRegex: typeof row.findRegex === 'string' ? row.findRegex : '',
+        replaceString: typeof row.replaceString === 'string' ? row.replaceString : '',
+      }
+    })
+  }
+
+  /**
+   * Update one character card's editor fields. Overrides are stored in a
+   * sidecar file, so JSON and PNG cards alike are updated without touching
+   * the original bytes; the override takes precedence at prompt build time.
+   * @param id - the character card.
+   * @param fields - the fields to update; omitted fields keep their values.
+   * @returns the updated profile view.
+   */
+  updateCharacter(id: CharacterId, fields: { name?: string; description?: string; personality?: string; scenario?: string; mesExample?: string }): CharacterProfile {
+    validateId('character', id)
+    const file = this.storeFile('characters', 'character', id)
+    if (file === undefined) throw new Error(`tavern: character ${JSON.stringify(id)} not found`)
+    const base = this.characterOverride(id) ?? {}
+    const next = { ...base }
+    for (const key of ['name', 'description', 'personality', 'scenario', 'mesExample'] as const) {
+      const value = fields[key]
+      if (typeof value !== 'string') continue
+      const text = value.trim()
+      if (text.length === 0) {
+        delete next[key]
+      } else {
+        next[key] = text
+      }
+    }
+    writeFileSync(join(this.root, 'characters', `${id}.override.json`), JSON.stringify(next, null, 2), 'utf-8')
+    return this.characterProfile(id)
   }
 
   /**
@@ -437,7 +684,7 @@ export class TavernService extends Service {
         id: view.id,
         name: view.name,
         format: view.format,
-        extensions: this.characterExtensions(view.id, view.format),
+        extensions: this.mergedExtensions(view.id, view.format),
         hasAvatar: view.format === 'png',
         // The card's opening messages: first_mes plus every alternate greeting,
         // so the chat can preload the scene the way SillyTavern does.
@@ -496,7 +743,7 @@ export class TavernService extends Service {
     if (id === undefined) return []
     const view = this.listCharacters().find(card => card.id === id)
     if (view === undefined) return []
-    const extensions = this.characterExtensions(view.id, view.format)
+    const extensions = this.mergedExtensions(view.id, view.format)
     const regexes = extensions.regex_scripts
     if (!Array.isArray(regexes)) return []
     const scripts: PromptScript[] = []
@@ -803,14 +1050,15 @@ export class TavernService extends Service {
   }
 
   /** Scan one store directory, parsing every file of one extension. */
-  private scanStore<T>(directory: 'worldbooks' | 'characters' | 'presets', extension: string, project: (file: string, id: string) => T): T[] {
+  private scanStore<T>(directory: 'worldbooks' | 'characters' | 'presets' | 'jailbreaks', extension: string, project: (file: string, id: string) => T): T[] {
     return readdirSync(join(this.root, directory))
       .filter(name => name.endsWith(`.${extension}`))
+      .filter(name => !name.endsWith(`.override.${extension}`))
       .map(name => project(join(this.root, directory, name), name.slice(0, -extension.length - 1)))
   }
 
   /** The existing store file of one id, or undefined. */
-  private storeFile(directory: 'worldbooks' | 'characters' | 'presets', kind: 'worldbook' | 'character' | 'preset', id: string): string | undefined {
+  private storeFile(directory: 'worldbooks' | 'characters' | 'presets' | 'jailbreaks', kind: 'worldbook' | 'character' | 'preset' | 'jailbreak' | 'jailbreak', id: string): string | undefined {
     validateId(kind as 'worldbook' | 'character', id)
     return STORE_EXTENSIONS[directory]
       .map(candidate => join(this.root, directory, `${id}.${candidate}`))
@@ -818,7 +1066,7 @@ export class TavernService extends Service {
   }
 
   /** Delete one store file, blocked while any attached session binds it. */
-  private deleteFile(directory: 'worldbooks' | 'characters' | 'presets', kind: 'worldbook' | 'character' | 'preset', id: string): void {
+  private deleteFile(directory: 'worldbooks' | 'characters' | 'presets' | 'jailbreaks', kind: 'worldbook' | 'character' | 'preset' | 'jailbreak' | 'jailbreak', id: string): void {
     validateId(kind as 'worldbook' | 'character', id)
     const bound = this.boundSessions(kind, id)
     if (bound.length > 0) {
@@ -830,12 +1078,14 @@ export class TavernService extends Service {
   }
 
   /** Every attached session whose folded binding references one store id. */
-  private boundSessions(kind: 'worldbook' | 'character' | 'preset', id: string): string[] {
+  private boundSessions(kind: 'worldbook' | 'character' | 'preset' | 'jailbreak' | 'jailbreak', id: string): string[] {
     const sessions: string[] = []
     for (const session of this.ctx.sessions.list()) {
       const binding = foldBinding(session.events)
       if (binding === null) continue
-      const references = kind === 'worldbook'
+      const references = kind === 'jailbreak'
+        ? binding.jailbreakId === (id as JailbreakId)
+        : kind === 'worldbook'
         ? binding.worldbookIds.includes(id as WorldBookId)
         : kind === 'character'
           ? binding.characterId === (id as CharacterId) || (binding.characterIds ?? []).includes(id as CharacterId)

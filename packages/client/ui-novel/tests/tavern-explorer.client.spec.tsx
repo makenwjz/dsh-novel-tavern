@@ -44,6 +44,9 @@ function tavernApi() {
     setMvu: vi.fn(),
       setPersona: vi.fn(),
       importChat: vi.fn(),
+      saveJailbreak: vi.fn(),
+      listJailbreaks: vi.fn(),
+      deleteJailbreak: vi.fn(),
     importPromptPreset: vi.fn(),
     listPromptPresets: vi.fn(),
     deletePromptPreset: vi.fn(),
@@ -72,6 +75,9 @@ function tavernApi() {
   api.listCharacters.mockResolvedValue(ok({ characters: [{ id: 'character-1', name: '阿雅', format: 'json' }] }))
   api.listWorldBooks.mockResolvedValue(ok({ worldbooks: [{ id: 'worldbook-1', name: '剑冢设定', entryCount: 1 }] }))
   api.listPromptPresets.mockResolvedValue(ok({ presets: [] }))
+  api.listJailbreaks.mockResolvedValue(ok({ jailbreaks: [] }))
+  api.saveJailbreak.mockResolvedValue(ok({ jailbreak: { id: 'jailbreak-1', name: '破限', content: '内容' } }))
+  api.deleteJailbreak.mockResolvedValue(ok({ deleted: true }))
   api.importPromptPreset.mockResolvedValue(ok({ preset: { id: 'preset-1', name: '预设', promptCount: 2, enabledCount: 1 } }))
   api.deletePromptPreset.mockResolvedValue(ok({ deleted: true }))
   return api
@@ -118,19 +124,21 @@ async function openLibrary(): Promise<void> {
 }
 
 describe('tavern explorer surface', () => {
-  it('renders the import box and the tree once the project tree loads', async () => {
+  it('renders the three-column library: character cards, worldbooks, settings', async () => {
     const api = tavernApi()
     renderTavern(api)
 
     await openLibrary()
 
-    // The worldbook and character rows appear after the tree resolves.
-    await waitFor(() => { expect(screen.getByText('剑冢设定')).toBeTruthy() })
-    expect(screen.getAllByText('阿雅').length).toBeGreaterThan(0)
-    // The import box is present: one character-card input, one worldbook input, paste area.
-    expect(screen.getAllByText('Import').length).toBeGreaterThan(0)
-    expect(screen.getByLabelText('Choose a character card file')).toBeTruthy()
-    expect(screen.getByLabelText('Choose a worldbook file')).toBeTruthy()
+    // The characters rail is the default: 阿雅 appears as a card.
+    await waitFor(() => { expect(screen.getByText('阿雅')).toBeTruthy() })
+    // The worldbooks rail lists 剑冢设定.
+    fireEvent.click(await screen.findByTitle('World books'))
+    expect(await screen.findByText('剑冢设定')).toBeTruthy()
+    // The settings rail hosts the import box.
+    fireEvent.click(await screen.findByTitle('User settings'))
+    expect(await screen.findByLabelText('Choose a character card file')).toBeTruthy()
+    expect(await screen.findByLabelText('Choose a worldbook file')).toBeTruthy()
     // One call from the chat view's card load + one from the library tree.
     expect(api.projectTree).toHaveBeenCalledTimes(2)
   })
@@ -141,6 +149,7 @@ describe('tavern explorer surface', () => {
     renderTavern(api)
 
     await openLibrary()
+    fireEvent.click(await screen.findByTitle('User settings'))
 
     const paste = await screen.findByLabelText('Or paste worldbook JSON')
     fireEvent.change(paste, { target: { value: '{"name":"新世界书","entries":[]}' } })
@@ -160,6 +169,7 @@ describe('tavern explorer surface', () => {
     renderTavern(api)
 
     await openLibrary()
+    fireEvent.click(await screen.findByTitle('User settings'))
 
     const input = await screen.findByLabelText('Choose a character card file')
     const file = new File(['not-a-card'], 'card.png', { type: 'image/png' })
@@ -176,7 +186,7 @@ describe('tavern explorer surface', () => {
     renderTavern(api)
 
     await openLibrary()
-
+    fireEvent.click(await screen.findByTitle('World books'))
     fireEvent.click(await screen.findByText('剑冢设定'))
     const deleteButton = await screen.findByText('Delete this worldbook')
     fireEvent.click(deleteButton)
@@ -215,7 +225,7 @@ describe('tavern explorer surface', () => {
     renderTavern(api)
 
     await openLibrary()
-    fireEvent.click((await screen.findAllByText('阿雅'))[0]!)
+    fireEvent.click(await screen.findByText('阿雅'))
 
     // Two regex scripts + one helper, two enabled in total.
     expect(await screen.findByText('Scripts: 3 total (2 enabled)')).toBeTruthy()
@@ -232,7 +242,7 @@ describe('tavern explorer surface', () => {
     })
 
     await openLibrary()
-
+    fireEvent.click(await screen.findByTitle('World books'))
     fireEvent.click(await screen.findByText('剑冢设定'))
     fireEvent.click(await screen.findByText('Delete this worldbook'))
 
@@ -255,6 +265,7 @@ describe('tavern explorer surface', () => {
     })
 
     await openLibrary()
+    fireEvent.click(await screen.findByTitle('User settings'))
 
     // Choose the bound session; the unbind button appears once the binding loads.
     fireEvent.change(await screen.findByLabelText('Select session'), { target: { value: 'session-abc' } })

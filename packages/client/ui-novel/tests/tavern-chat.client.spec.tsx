@@ -50,6 +50,9 @@ function chatApi() {
       setMvu: vi.fn(),
       setPersona: vi.fn(),
       importChat: vi.fn(),
+      saveJailbreak: vi.fn(),
+      listJailbreaks: vi.fn(),
+      deleteJailbreak: vi.fn(),
       importPromptPreset: vi.fn(),
       listPromptPresets: vi.fn(),
       deletePromptPreset: vi.fn(),
@@ -85,6 +88,7 @@ function chatApi() {
   api.sessions.prompt.mockResolvedValue(ok({ accepted: true }))
   api.tavern.setGreeting.mockResolvedValue(ok({ appended: true }))
   api.tavern.listPromptPresets.mockResolvedValue(ok({ presets: [] }))
+  api.tavern.listJailbreaks.mockResolvedValue(ok({ jailbreaks: [] }))
   api.tavern.setWorldBookEntryEnabled.mockResolvedValue(ok({ updated: true }))
   api.workspace.list.mockResolvedValue(ok({ items: [], archivedSessionIds: [] }))
   api.workspace.archiveSession.mockResolvedValue(ok({ archivedSessionIds: [] }))

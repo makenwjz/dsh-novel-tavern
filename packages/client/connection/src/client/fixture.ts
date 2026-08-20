@@ -3003,6 +3003,10 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
       setWorldBookEntryEnabled: request => ok(request, { updated: true }),
       listCharacters: request => ok(request, { characters: [] }),
       importCharacter: request => ok(request, { character: { id: 'character-c1' as never, name: 'Aya', format: 'json' } }),
+      updateCharacter: request => ok(request, { character: { id: request.payload.id as never, name: request.payload.name ?? 'Aya', format: 'json' } }),      updateCharacterScripts: request => ok(request, { scripts: [] }),
+      saveWorldBookEntry: request => ok(request, { updated: true }),
+      deleteWorldBookEntry: request => ok(request, { deleted: true }),
+
       deleteCharacter: request => ok(request, { deleted: true }),
       binding: request => ok(request, { binding: null }),
       setBinding: request => ok(request, { binding: request.payload.binding }),
@@ -3013,7 +3017,10 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
       advanceStage: request => ok(request, { binding: { mode: 'novel', worldbookIds: [], characterId: null, stage: 1 } }),
       setGreeting: request => ok(request, { appended: true }),
       setMvu: request => ok(request, { binding: { mode: 'tavern', worldbookIds: [], characterId: null, mvuVariables: request.payload.variables } }),
-      importChat: request => ok(request, { imported: 2 }),
+      importChat: request => ok(request, { imported: 2 }),      saveJailbreak: request => ok(request, { jailbreak: { id: 'jailbreak-j1' as never, name: request.payload.name, content: request.payload.content } }),
+      listJailbreaks: request => ok(request, { jailbreaks: [] }),
+      deleteJailbreak: request => ok(request, { deleted: true }),
+
       setPersona: request => ok(request, { binding: { mode: 'tavern', worldbookIds: [], characterId: null, persona: request.payload.persona } }),
       scoreCharacter: request => ok(request, { score: { overall: 8, clarity: 9, consistency: 7, tokenEfficiency: 6, note: 'ok' } }),
       projectTree: request => ok(request, { worldbooks: [], characters: [] }),

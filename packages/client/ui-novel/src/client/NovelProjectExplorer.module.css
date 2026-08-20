@@ -202,6 +202,310 @@
   padding: 22px 26px;
 }
 
+/* ── three-column library: rail / list / detail ─────────────────────────── */
+
+.body3 {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 168px 248px minmax(0, 1fr);
+}
+
+.rail {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 8px;
+  border-right: 1px solid var(--gi-line);
+  background: #141414;
+}
+
+.railItem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 10px 4px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--gi-cream-2);
+  font: inherit;
+  font-size: 20px;
+  cursor: pointer;
+  transition: background 140ms ease;
+}
+
+.railItem:hover {
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.railItemActive {
+  background: rgba(203, 174, 203, 0.10);
+  border-color: rgba(203, 174, 203, 0.25);
+}
+
+.railLabel {
+  font-size: 11px;
+  color: var(--gi-cream-3);
+}
+
+.railItemActive .railLabel {
+  color: rgba(203, 174, 203, 0.9);
+}
+
+.railList {
+  overflow-y: auto;
+  padding: 12px 10px;
+  border-right: 1px solid var(--gi-line);
+  background: #151515;
+}
+
+.railList::-webkit-scrollbar {
+  display: none;
+}
+
+.railListInner {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.railListTitle {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--gi-cream-3);
+}
+
+.railCard {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  box-sizing: border-box;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--gi-cream);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 140ms ease;
+}
+
+.railCard:hover {
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.railCardActive {
+  background: rgba(203, 174, 203, 0.10);
+  border-color: rgba(203, 174, 203, 0.25);
+}
+
+.railCardAvatar {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  border: 1px solid rgba(127, 127, 127, 0.3);
+  object-fit: cover;
+  background: #1b1b1b;
+}
+
+.railCardAvatarFallback {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  border: 1px solid rgba(127, 127, 127, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #1f1f1f;
+  color: rgba(203, 174, 203, 0.8);
+  font-size: 18px;
+}
+
+.railCardIcon {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  border: 1px solid rgba(127, 127, 127, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #1f1f1f;
+  font-size: 18px;
+}
+
+.railCardMeta {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.railCardMeta strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--gi-cream);
+}
+
+.detail3 {
+  overflow-y: auto;
+  padding: 22px 26px;
+}
+
+.detail3::-webkit-scrollbar {
+  display: none;
+}
+
+/* editable character editor + related worldbooks + start chat */
+.charActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sessionSelect {
+  padding: 6px 8px;
+  border: 1px solid var(--gi-line);
+  border-radius: 8px;
+  background: #1a1a1a;
+  color: var(--gi-cream);
+  font: inherit;
+  font-size: 12px;
+}
+
+.charEditArea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 7px 9px;
+  border: 1px solid var(--gi-line);
+  border-radius: 8px;
+  background: #1a1a1a;
+  color: var(--gi-cream);
+  font: inherit;
+  font-size: 12px;
+  line-height: 19px;
+  resize: vertical;
+}
+
+.charEditArea:focus {
+  outline: none;
+  border-color: rgba(203, 174, 203, 0.5);
+}
+
+.jailbreakArea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid rgba(52, 61, 56, 0.44);
+  border-radius: 10px;
+  background: #1a1a1a;
+  color: var(--gi-cream);
+  font: inherit;
+  font-size: 13px;
+  line-height: 21px;
+  font-family: 'Noto Serif CJK SC', 'Source Han Serif SC', 'Songti SC', serif;
+  resize: vertical;
+}
+
+.jailbreakArea:focus {
+  outline: none;
+  border-color: rgba(203, 174, 203, 0.5);
+}
+
+/* rail import row for jailbreaks */
+.railImport {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 10px;
+  border: 1px dashed rgba(52, 61, 56, 0.5);
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.railImport:hover {
+  border-color: rgba(203, 174, 203, 0.45);
+}
+
+.railImportLabel {
+  color: var(--gi-cream-2);
+  font-size: 12px;
+}
+
+.railImport input[type='file'] {
+  max-width: 110px;
+  font-size: 11px;
+}
+
+/* worldbook entry actions + inline editor */
+.wbThActions {
+  width: 96px;
+}
+
+.wbRowActions {
+  display: flex;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.miniButton,
+.miniDanger {
+  padding: 3px 9px;
+  border: 1px solid rgba(52, 61, 56, 0.44);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--gi-cream-2);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.miniButton:hover:not(:disabled) {
+  border-color: rgba(203, 174, 203, 0.5);
+  color: rgba(203, 174, 203, 0.9);
+}
+
+.miniDanger {
+  color: rgba(232, 138, 138, 0.9);
+  border-color: rgba(232, 138, 138, 0.35);
+}
+
+.miniDanger:hover:not(:disabled) {
+  border-color: rgba(232, 138, 138, 0.7);
+}
+
+.miniButton:disabled,
+.miniDanger:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.entryEditor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  border: 1px solid rgba(52, 61, 56, 0.44);
+  border-radius: 12px;
+  background: #1c1c1c;
+}
+
+.entryEditorActions {
+  display: flex;
+  gap: 8px;
+}
+
 .detailTitle {
   margin: 0 0 14px;
   font-size: 18px;
@@ -268,7 +572,8 @@
 .wbDetail {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
+  max-width: 1100px;
 }
 
 .wbHeader {
@@ -280,60 +585,79 @@
 .searchBox {
   flex: none;
   width: 220px;
-  padding: 6px 10px;
-  border: 1px solid var(--gi-line);
-  border-radius: 8px;
+  padding: 7px 11px;
+  border: 1px solid rgba(52, 61, 56, 0.44);
+  border-radius: 9px;
   background: #1a1a1a;
   color: var(--gi-cream);
   font: inherit;
   font-size: 12px;
+  transition: border-color 140ms ease;
+}
+
+.searchBox::placeholder {
+  color: rgba(151, 151, 128, 0.6);
 }
 
 .searchBox:focus {
   outline: none;
-  border-color: var(--gi-gold);
+  border-color: rgba(203, 174, 203, 0.55);
 }
 
+.wbSummary {
+  font-size: 12px;
+  color: var(--gi-cream-3);
+}
+
+/* The World Info table framed as a clean panel. */
 .wbTable {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   font-size: 12px;
+  border: 1px solid rgba(52, 61, 56, 0.44);
+  border-radius: 12px;
+  overflow: hidden;
+  background: #1a1a1a;
 }
 
 .wbTable th {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  padding: 8px 10px;
-  border-bottom: 1px solid var(--gi-line-strong);
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(52, 61, 56, 0.44);
   background: #141414;
-  color: var(--gi-cream-3);
+  color: rgba(151, 151, 128, 0.95);
   text-align: left;
   font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.06em;
 }
 
 .wbTable td {
-  padding: 8px 10px;
-  border-bottom: 1px solid var(--gi-line);
+  padding: 11px 14px;
+  border-bottom: 1px solid rgba(52, 61, 56, 0.30);
   vertical-align: top;
   color: var(--gi-cream-2);
-  line-height: 18px;
+  line-height: 20px;
+}
+
+.wbTable tbody tr:last-child td {
+  border-bottom: none;
 }
 
 .wbTable tr:hover td {
-  background: #1b212b;
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .wbRowOff td {
-  opacity: 0.5;
+  opacity: 0.45;
 }
 
 .wbThToggle {
-  width: 34px;
+  width: 40px;
 }
 
 .wbThName {
-  width: 22%;
+  width: 24%;
 }
 
 .wbThKeys {
@@ -341,23 +665,47 @@
 }
 
 .wbThContent {
-  width: 60%;
+  width: 58%;
 }
 
 .wbName {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
 }
 
 .wbName strong {
   color: var(--gi-cream);
+  font-size: 13px;
+}
+
+/* Keyword chips inside the keys column. */
+.wbKeys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.wbKeyChip {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: rgba(203, 174, 203, 0.12);
+  color: rgba(203, 174, 203, 0.9);
+  font-size: 11px;
+  line-height: 17px;
+}
+
+.wbContent {
+  color: var(--gi-cream-2);
+  line-height: 20px;
 }
 
 .wbEmpty {
   text-align: center;
   color: var(--gi-cream-3);
-  padding: 20px;
+  padding: 24px;
 }
 
 /* ── character detail: SillyTavern-style character editor ───────────────── */

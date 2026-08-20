@@ -42,6 +42,20 @@ export interface PromptPresetView {
   readonly enabledCount: number
 }
 
+/** Opaque identifier of one jailbreak preset, minted by the service. */
+export type JailbreakId = Branded<'tavern:jailbreak'>
+
+/** One AI-jailbreak preset: a user-authored prompt that relaxes the model's
+ *  guardrails (SillyTavern's "破限" presets). */
+export interface JailbreakPreset {
+  /** Service-minted stable identifier. */
+  readonly id: JailbreakId
+  /** Display name. */
+  readonly name: string
+  /** The prompt text injected ahead of the character block. */
+  readonly content: string
+}
+
 /** One SillyTavern lorebook entry normalized to the supported field subset. */
 export interface LorebookEntry {
   /** The entry's display name (cards address entries by name to toggle them). */
@@ -217,6 +231,9 @@ export interface TavernBindingData {
   readonly presetId?: PromptPresetId
   /** The user persona text, injected into the prompt (SillyTavern Persona). */
   readonly persona?: string
+  /** The AI-jailbreak preset (破限) whose prompt injects ahead of the
+   *  character block, relaxing the model's guardrails. */
+  readonly jailbreakId?: JailbreakId
 }
 
 /** One dangling binding reference found by the invariant check. */

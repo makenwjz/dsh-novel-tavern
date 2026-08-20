@@ -52,6 +52,8 @@ type ChatSummary = {
   readonly presetId: string | null
   /** The session's user persona text. */
   readonly persona: string
+  /** The bound AI-jailbreak (破限) preset id, or null. */
+  readonly jailbreakId: string | null
   /** Worldbook entry names this session keeps disabled (driven by the card frontend). */
   readonly disabledEntryNames: string[]
   /** The session's MVU variable state (card variables, injected into the prompt). */
@@ -430,6 +432,8 @@ export function TavernChat({ api, t, useSessions, onNeedLibrary, focusSession }:
   const [worldbooks, setWorldbooks] = useState<WorldbookRow[]>([])
   /** Imported prompt presets, offered in the session-resource picker. */
   const [presets, setPresets] = useState<Array<{ id: string; name: string }>>([])
+  /** AI-jailbreak (破限) presets, offered in the session-resource picker. */
+  const [jailbreaks, setJailbreaks] = useState<Array<{ id: string; name: string }>>([])
   const [avatars, setAvatars] = useState<Record<string, string>>({})
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
@@ -454,11 +458,12 @@ export function TavernChat({ api, t, useSessions, onNeedLibrary, focusSession }:
 
   /** Update the active session's binding (preset and/or worldbook selection)
    *  through the API and mirror it into the local summary. */
-  const updateBinding = (patch: { presetId?: string | null; worldbookIds?: string[] }): void => {
+  const updateBinding = (patch: { presetId?: string | null; jailbreakId?: string | null; worldbookIds?: string[] }): void => {
     const summary = chats.find(chat => chat.sessionId === active)
     if (summary === undefined) return
     const worldbookIds = patch.worldbookIds ?? [...summary.worldbookIds]
     const presetId = patch.presetId === undefined ? summary.presetId : patch.presetId
+    const jailbreakId = patch.jailbreakId === undefined ? summary.jailbreakId : patch.jailbreakId
     const binding = {
       mode: 'tavern' as const,
       worldbookIds: worldbookIds as never,
@@ -466,9 +471,10 @@ export function TavernChat({ api, t, useSessions, onNeedLibrary, focusSession }:
       characterIds: summary.characterIds,
       disabledEntryNames: summary.disabledEntryNames,
       ...(presetId === null || presetId === undefined ? {} : { presetId: presetId as never }),
+      ...(jailbreakId === null || jailbreakId === undefined ? {} : { jailbreakId: jailbreakId as never }),
     }
     setChats(previous => previous.map(chat => chat.sessionId === active
-      ? { ...chat, presetId, worldbookIds }
+      ? { ...chat, presetId, jailbreakId, worldbookIds }
       : chat))
     void api.tavern.setBinding({ sessionId: active as never, binding }).then(result => {
       if (!result.result.ok) setError(t('chatError', { reason: result.result.error.message }))
@@ -624,15 +630,19 @@ export function TavernChat({ api, t, useSessions, onNeedLibrary, focusSession }:
     void Promise.all([
       api.tavern.projectTree({}),
       api.tavern.listPromptPresets({}),
+      api.tavern.listJailbreaks({}),
       api.sessions.list({}),
       api.workspace.list({}),
-    ]).then(async ([treeResult, presetResult, sessionResult, workspaceResult]) => {
+    ]).then(async ([treeResult, presetResult, jailbreakResult, sessionResult, workspaceResult]) => {
       if (!current) return
       const archivedIds = workspaceResult.result.ok ? workspaceResult.result.value.archivedSessionIds : []
       const rows = treeResult.result.ok ? treeResult.result.value.characters : []
       const worldbooks: WorldbookRow[] = treeResult.result.ok ? treeResult.result.value.worldbooks : []
       if (presetResult.result.ok) {
         setPresets(presetResult.result.value.presets.map(preset => ({ id: preset.id, name: preset.name })))
+      }
+      if (jailbreakResult.result.ok) {
+        setJailbreaks(jailbreakResult.result.value.jailbreaks.map(jailbreak => ({ id: jailbreak.id, name: jailbreak.name })))
       }
       const bookById = new Map(worldbooks.map(book => [book.id, book]))
       const cardInfos: CardInfo[] = rows.map(row => ({
@@ -673,6 +683,7 @@ export function TavernChat({ api, t, useSessions, onNeedLibrary, focusSession }:
           mvuVariables: { ...(b.mvuVariables ?? {}) },
           presetId: b.presetId ?? null,
           persona: b.persona ?? '',
+          jailbreakId: b.jailbreakId ?? null,
         })
       }
       setChats(summaries)
@@ -877,6 +888,7 @@ export function TavernChat({ api, t, useSessions, onNeedLibrary, focusSession }:
           mvuVariables: {},
           presetId: null,
           persona: '',
+          jailbreakId: null,
         },
       ])
       setActive(sessionId)
@@ -1084,6 +1096,20 @@ export function TavernChat({ api, t, useSessions, onNeedLibrary, focusSession }:
                       ))}
                     </select>
                   </label>
+                  <label className={css.resourceField}>
+                    <span>{t('jailbreakPick')}</span>
+                    <select
+                      className={css.presetSelect}
+                      aria-label={t('jailbreakPick')}
+                      value={activeSummary.jailbreakId ?? ''}
+                      onChange={event => updateBinding({ jailbreakId: event.target.value === '' ? null : event.target.value })}
+                    >
+                      <option value="">{t('jailbreakNone')}</option>
+                      {jailbreaks.map(jailbreak => (
+                        <option key={jailbreak.id} value={jailbreak.id}>🔓 {jailbreak.name}</option>
+                      ))}
+                    </select>
+                  </label>
                   <fieldset className={css.worldbookField}>
                     <legend>{t('worldbookPick')}</legend>
                     {worldbooks.length === 0 ? (
@@ -1208,7 +1234,20 @@ export function TavernChat({ api, t, useSessions, onNeedLibrary, focusSession }:
                             greetings: activeSummary.greetings,
                           }}
                         />
-                        <time className={css.bubbleTime}>{clockOf(row.time)}</time>
+                        <span className={css.bubbleMeta}>
+                          <time>{clockOf(row.time)}</time>
+                          <span className={css.tokenCount}>{t('tokenCount', { count: Math.max(1, Math.ceil(row.text.length / 4)) })}</span>
+                          <button
+                            type="button"
+                            className={css.copyButton}
+                            aria-label={t('copyMessage')}
+                            onClick={() => {
+                              void navigator.clipboard?.writeText(row.text).then(() => setNotice(t('copied')))
+                            }}
+                          >
+                            {t('copyMessage')}
+                          </button>
+                        </span>
                         {canRewrite ? (
                           <button type="button" className={css.rewriteButton} disabled={sending} onClick={() => rewriteReply(row)}>
                             {t('rewriteReply')}

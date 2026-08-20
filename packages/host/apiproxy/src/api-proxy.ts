@@ -1851,7 +1851,7 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
   function tavernStoreError(
     request: RpcRequest<unknown>,
     error: unknown,
-    kind: 'worldbook' | 'character' | 'preset',
+    kind: 'worldbook' | 'character' | 'preset' | 'jailbreak',
     phase: 'import' | 'delete',
   ): RpcResponse<never> {
     const message = error instanceof Error ? error.message : String(error)
@@ -3254,6 +3254,67 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
         }
       },
 
+      async updateCharacter(request) {
+        const tavern = tavernStore()
+        if ('error' in tavern) return err(request, tavern.error)
+        try {
+          const profile = tavern.updateCharacter(request.payload.id, {
+            ...(request.payload.name === undefined ? {} : { name: request.payload.name }),
+            ...(request.payload.description === undefined ? {} : { description: request.payload.description }),
+            ...(request.payload.personality === undefined ? {} : { personality: request.payload.personality }),
+            ...(request.payload.scenario === undefined ? {} : { scenario: request.payload.scenario }),
+            ...(request.payload.mesExample === undefined ? {} : { mesExample: request.payload.mesExample }),
+          })
+          const view = tavern.listCharacters().find(card => card.id === request.payload.id)
+          return ok(request, { character: { id: request.payload.id, name: profile.name, format: view?.format ?? 'json' } })
+        } catch (error: unknown) {
+          const message = error instanceof Error ? error.message : String(error)
+          return err(request, { code: 'internal', message, details: {} })
+        }
+      },
+
+      async updateCharacterScripts(request) {
+        const tavern = tavernStore()
+        if ('error' in tavern) return err(request, tavern.error)
+        try {
+          const scripts = tavern.updateCharacterScripts(request.payload.id, request.payload.overrides)
+          return ok(request, { scripts })
+        } catch (error: unknown) {
+          const message = error instanceof Error ? error.message : String(error)
+          return err(request, { code: 'internal', message, details: {} })
+        }
+      },
+
+      async saveWorldBookEntry(request) {
+        const tavern = tavernStore()
+        if ('error' in tavern) return err(request, tavern.error)
+        try {
+          tavern.saveWorldBookEntry(request.payload.id, {
+            name: request.payload.name,
+            ...(request.payload.keys === undefined ? {} : { keys: request.payload.keys }),
+            ...(request.payload.content === undefined ? {} : { content: request.payload.content }),
+            ...(request.payload.comment === undefined ? {} : { comment: request.payload.comment }),
+            ...(request.payload.enabled === undefined ? {} : { enabled: request.payload.enabled }),
+          })
+          return ok(request, { updated: true as const })
+        } catch (error: unknown) {
+          const message = error instanceof Error ? error.message : String(error)
+          return err(request, { code: 'internal', message, details: {} })
+        }
+      },
+
+      async deleteWorldBookEntry(request) {
+        const tavern = tavernStore()
+        if ('error' in tavern) return err(request, tavern.error)
+        try {
+          tavern.deleteWorldBookEntry(request.payload.id, request.payload.name)
+          return ok(request, { deleted: true as const })
+        } catch (error: unknown) {
+          const message = error instanceof Error ? error.message : String(error)
+          return err(request, { code: 'internal', message, details: {} })
+        }
+      },
+
       async deleteCharacter(request) {
         const tavern = tavernStore()
         if ('error' in tavern) return err(request, tavern.error)
@@ -3404,6 +3465,39 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
             return err(request, { code: 'bad-request', message, details: { issues: [] } })
           }
           return err(request, { code: 'internal', message, details: {} })
+        }
+      },
+
+      async saveJailbreak(request) {
+        const tavern = tavernStore()
+        if ('error' in tavern) return err(request, tavern.error)
+        try {
+          const jailbreak = tavern.saveJailbreak(request.payload.id, request.payload.name, request.payload.content)
+          return ok(request, { jailbreak })
+        } catch (error: unknown) {
+          const message = error instanceof Error ? error.message : String(error)
+          return err(request, { code: 'internal', message, details: {} })
+        }
+      },
+
+      async listJailbreaks(request) {
+        const tavern = tavernStore()
+        if ('error' in tavern) return err(request, tavern.error)
+        try {
+          return ok(request, { jailbreaks: tavern.listJailbreaks() })
+        } catch (error: unknown) {
+          return tavernStoreError(request, error, 'jailbreak', 'import')
+        }
+      },
+
+      async deleteJailbreak(request) {
+        const tavern = tavernStore()
+        if ('error' in tavern) return err(request, tavern.error)
+        try {
+          tavern.deleteJailbreak(request.payload.id)
+          return ok(request, { deleted: true as const })
+        } catch (error: unknown) {
+          return tavernStoreError(request, error, 'jailbreak', 'delete')
         }
       },
 
