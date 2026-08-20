@@ -166,6 +166,12 @@ export interface CharacterProjectView {
   readonly hasAvatar: boolean
   /** The card's opening messages: first_mes plus every alternate greeting. */
   readonly greetings: readonly string[]
+  /** The card's editor fields, for the SillyTavern-style character editor. */
+  readonly description: string
+  readonly personality: string
+  readonly scenario: string
+  readonly mesExample: string
+  readonly tags: readonly string[]
 }
 
 /** One worldbook in the project explorer view, with its entries. */

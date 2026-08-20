@@ -445,6 +445,12 @@ export class TavernService extends Service {
           ...(profile.firstMes.length === 0 ? [] : [profile.firstMes]),
           ...profile.alternateGreetings,
         ],
+        // The card's editor fields, for the SillyTavern-style character editor.
+        description: profile.description,
+        personality: profile.personality,
+        scenario: profile.scenario,
+        mesExample: profile.mesExample,
+        tags: [...profile.tags],
       }
     })
     return { worldbooks, characters }

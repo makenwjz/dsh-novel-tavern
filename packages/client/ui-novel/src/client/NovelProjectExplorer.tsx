@@ -35,7 +35,7 @@ export type NovelProjectExplorerProps =
 type TavernWorldBookRow = { id: WorldBookId; name: string; entries: Array<{ name: string; keys: string[]; content: string; comment: string; enabled: boolean }> }
 
 /** One tavern character node. */
-type TavernCharacterRow = { id: CharacterId; name: string; format: 'json' | 'png'; extensions: Record<string, unknown>; hasAvatar: boolean }
+type TavernCharacterRow = { id: CharacterId; name: string; format: 'json' | 'png'; extensions: Record<string, unknown>; hasAvatar: boolean; description: string; personality: string; scenario: string; mesExample: string; tags: string[]; greetings: string[] }
 
 /** The tavern tree payload. */
 type TavernTree = { worldbooks: TavernWorldBookRow[]; characters: TavernCharacterRow[] }
@@ -63,6 +63,12 @@ async function loadTavernTree(api: Pick<IApiClient, 'tavern'>): Promise<TavernTr
       format: character.format,
       extensions: character.extensions,
       hasAvatar: character.hasAvatar,
+      description: character.description,
+      personality: character.personality,
+      scenario: character.scenario,
+      mesExample: character.mesExample,
+      tags: [...character.tags],
+      greetings: [...character.greetings],
     })),
   }
 }
@@ -112,6 +118,7 @@ export function NovelProjectExplorer({ useStore, actions, read, api, useSessions
   const [worldBookDraft, setWorldBookDraft] = useState('')
   const [presetDraft, setPresetDraft] = useState('')
   const [presets, setPresets] = useState<Array<{ id: string; name: string; promptCount: number; enabledCount: number }>>([])
+  const [wbQuery, setWbQuery] = useState('')
   const [busy, setBusy] = useState(false)
   // Session to open in the chat view when a blocked delete jumps there.
   const [focusSession, setFocusSession] = useState('')
@@ -469,45 +476,208 @@ export function NovelProjectExplorer({ useStore, actions, read, api, useSessions
   }
 
   const renderTavernDetail = (): ReactNode => {
-    if (selection.type === 'root') return <p className={css.hint}>{t('explorerHint')}</p>
-    if (selection.type === 'worldbook') {
-      const { book } = selection
+    if (selection.type === 'root') {
+      // SillyTavern-style library home: imports, presets, and roleplay setup
+      // use the full width instead of a cramped sidebar.
       return (
-        <div>
-          <h4 className={css.detailTitle}>{book.name}</h4>
-          <button type="button" className={css.dangerButton} onClick={() => deleteWorldBook(book.id, book.name)}>
-            {t('deleteWorldBookAction')}
-          </button>
-          <ul className={css.detailList}>
-            {book.entries.map((entry, index) => (
-              <li key={index} className={css.entryCard}>
-                <label className={css.entryToggle}>
+        <div className={css.home}>
+          <section className={css.homeSection}>
+            <h4 className={css.detailTitle}>{t('importSection')}</h4>
+            <div className={css.importCards}>
+              <div className={css.importCard}>
+                <strong>{t('importCharacter')}</strong>
+                <p className={css.muted}>{t('importCharacterHint')}</p>
+                <label className={css.fileRow}>
+                  <span className={css.treeLabel}>{t('importCharacterFile')}</span>
+                  <input type="file" accept=".png,.json" aria-label={t('importCharacterFile')} disabled={busy} onChange={onCharacterFile} />
+                </label>
+              </div>
+              <div className={css.importCard}>
+                <strong>{t('importWorldBook')}</strong>
+                <p className={css.muted}>{t('importWorldBookHint')}</p>
+                <label className={css.fileRow}>
+                  <span className={css.treeLabel}>{t('importWorldBookFile')}</span>
+                  <input type="file" accept=".json,application/json" aria-label={t('importWorldBookFile')} disabled={busy} onChange={onWorldBookFile} />
+                </label>
+                <textarea
+                  className={css.pasteArea}
+                  aria-label={t('importWorldBookPaste')}
+                  placeholder={t('importWorldBookPaste')}
+                  value={worldBookDraft}
+                  disabled={busy}
+                  onChange={event => setWorldBookDraft(event.target.value)}
+                />
+                <button type="button" className={css.actionButton} disabled={busy} onClick={importWorldBookDraft}>
+                  {busy ? t('importing') : t('importAction')}
+                </button>
+              </div>
+              <div className={css.importCard}>
+                <strong>{t('importPreset')}</strong>
+                <p className={css.muted}>{t('importPresetHint')}</p>
+                <label className={css.fileRow}>
+                  <span className={css.treeLabel}>{t('importPresetFile')}</span>
+                  <input type="file" accept=".json,application/json" aria-label={t('importPresetFile')} disabled={busy} onChange={onPresetFile} />
+                </label>
+                <textarea
+                  className={css.pasteArea}
+                  aria-label={t('importPresetPaste')}
+                  placeholder={t('importPresetPaste')}
+                  value={presetDraft}
+                  disabled={busy}
+                  onChange={event => setPresetDraft(event.target.value)}
+                />
+                <button type="button" className={css.actionButton} disabled={busy} onClick={importPresetDraft}>
+                  {busy ? t('importing') : t('importPresetAction')}
+                </button>
+              </div>
+            </div>
+            {presets.length === 0 ? null : (
+              <ul className={css.homeList}>
+                {presets.map(preset => (
+                  <li key={preset.id} className={css.detailItem}>
+                    <strong>{preset.name}</strong>
+                    <span className={css.muted}>{t('presetCount', { enabled: preset.enabledCount, total: preset.promptCount })}</span>
+                    <button type="button" className={css.dangerButton} disabled={busy} onClick={() => deletePreset(preset.id, preset.name)}>
+                      {t('deletePresetAction')}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+          <section className={css.homeSection}>
+            <h4 className={css.detailTitle}>{t('startRoleplay')}</h4>
+            <select aria-label={t('selectSession')} value={sessionId} onChange={event => setSessionId(event.target.value)}>
+              <option value="">{t('chooseSession')}</option>
+              {sessions.ids.map(id => (
+                <option key={id} value={id}>{sessions.byId[id]?.title ?? t('sessionTitle')}</option>
+              ))}
+            </select>
+            <div className={css.characterPicker}>
+              {tree?.characters.map(character => (
+                <label key={character.id} className={css.pickRow}>
                   <input
                     type="checkbox"
-                    checked={entry.enabled}
-                    aria-label={t('entryToggle', { name: entry.comment || entry.name })}
-                    onChange={event => {
-                      const enabled = event.target.checked
-                      void api.tavern.setWorldBookEntryEnabled({ id: book.id as never, entryName: entry.name || entry.comment, enabled }).then(result => {
-                        if (!result.result.ok) {
-                          setNotice({ kind: 'error', text: t('importFailed', { reason: result.result.error.message }) })
-                          return
-                        }
-                        setNotice({ kind: 'success', text: t('entryUpdated') })
-                        reloadTavern()
-                      }, () => {})
-                    }}
+                    checked={characterIds.includes(character.id)}
+                    onChange={() => setCharacterIds(current =>
+                      current.includes(character.id)
+                        ? current.filter(id => id !== character.id)
+                        : [...current, character.id])}
                   />
-                  <span className={entry.enabled ? css.entryToggleOn : css.entryToggleOff}>
-                    {entry.enabled ? t('entryEnabled') : t('entryDisabled')}
-                  </span>
+                  <span className={css.treeLabel}>{character.name}</span>
                 </label>
-                <strong>{entry.keys.length > 0 ? entry.keys.join('、') : t('entryNoKeys')}</strong>
-                {entry.comment.length === 0 ? null : <span className={css.muted}>{entry.comment}</span>}
-                <p>{entry.content}</p>
-              </li>
-            ))}
-          </ul>
+              ))}
+            </div>
+            <div className={css.roleplayActions}>
+              <button type="button" className={css.actionButton} onClick={() => runRoleplay(() => api.tavern.startRoleplay({
+                sessionId: sessionId as never,
+                characterIds: characterIds as never,
+                worldbookIds: tree?.worldbooks.map(book => book.id) ?? [],
+              }).then((result) => { if (!result.result.ok) throw new Error(result.result.error.message) }))}>
+                {t('startRoleplay')}
+              </button>
+              <button type="button" className={css.actionButton} onClick={() => runRoleplay(() => api.tavern.stopRoleplay({
+                sessionId: sessionId as never,
+              }).then((result) => { if (!result.result.ok) throw new Error(result.result.error.message) }))}>
+                {t('stopRoleplay')}
+              </button>
+              {binding === null ? null : (
+                <button type="button" className={css.actionButton} disabled={busy} onClick={unbindSession}>
+                  {t('unbind')}
+                </button>
+              )}
+            </div>
+            {sessionId === '' || binding === null ? null : (
+              <>
+                <p className={css.status}>
+                  {binding.mode === 'tavern'
+                    ? t('boundSummary', {
+                      characters: (binding.characterIds ?? (binding.characterId === null ? [] : [binding.characterId]))
+                        .map(id => tree?.characters.find(card => card.id === id)?.name ?? id)
+                        .join('、') || t('noBoundDetail'),
+                      books: binding.worldbookIds
+                        .map(id => tree?.worldbooks.find(book => book.id === id)?.name ?? id)
+                        .join('、') || t('noBoundWorldbooks'),
+                    })
+                    : t('boundNovel')}
+                </p>
+                <p className={css.status}>{t('unbindHint')}</p>
+              </>
+            )}
+            <p className={css.status}>{t('roleplayHint')}</p>
+          </section>
+        </div>
+      )
+    }
+    if (selection.type === 'worldbook') {
+      const { book } = selection
+      const query = wbQuery.trim().toLowerCase()
+      const entries = query.length === 0
+        ? book.entries
+        : book.entries.filter(entry =>
+            entry.name.toLowerCase().includes(query)
+            || entry.comment.toLowerCase().includes(query)
+            || entry.keys.some(key => key.toLowerCase().includes(query)))
+      return (
+        <div className={css.wbDetail}>
+          <div className={css.wbHeader}>
+            <h4 className={css.detailTitle}>{book.name}</h4>
+            <span className={css.muted}>{t('entryCount', { count: book.entries.length })}</span>
+            <span className={css.paneHeaderSpacer} />
+            <input
+              className={css.searchBox}
+              aria-label={t('wbSearch')}
+              placeholder={t('wbSearch')}
+              value={wbQuery}
+              onChange={event => setWbQuery(event.target.value)}
+            />
+            <button type="button" className={css.dangerButton} onClick={() => deleteWorldBook(book.id, book.name)}>
+              {t('deleteWorldBookAction')}
+            </button>
+          </div>
+          <table className={css.wbTable}>
+            <thead>
+              <tr>
+                <th className={css.wbThToggle} />
+                <th className={css.wbThName}>{t('wbEntryName')}</th>
+                <th className={css.wbThKeys}>{t('wbEntryKeys')}</th>
+                <th className={css.wbThContent}>{t('wbEntryContent')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {entries.map((entry, index) => (
+                <tr key={index} className={entry.enabled ? undefined : css.wbRowOff}>
+                  <td>
+                    <input
+                      type="checkbox"
+                      checked={entry.enabled}
+                      aria-label={t('entryToggle', { name: entry.comment || entry.name })}
+                      onChange={event => {
+                        const enabled = event.target.checked
+                        void api.tavern.setWorldBookEntryEnabled({ id: book.id as never, entryName: entry.name || entry.comment, enabled }).then(result => {
+                          if (!result.result.ok) {
+                            setNotice({ kind: 'error', text: t('importFailed', { reason: result.result.error.message }) })
+                            return
+                          }
+                          setNotice({ kind: 'success', text: t('entryUpdated') })
+                          reloadTavern()
+                        }, () => {})
+                      }}
+                    />
+                  </td>
+                  <td className={css.wbName}>
+                    <strong>{entry.name.length > 0 ? entry.name : (entry.comment.length > 0 ? entry.comment : t('entryNoKeys'))}</strong>
+                    {entry.comment.length === 0 ? null : <span className={css.muted}>{entry.comment}</span>}
+                  </td>
+                  <td className={css.wbKeys}>{entry.keys.length > 0 ? entry.keys.join('、') : t('entryNoKeys')}</td>
+                  <td className={css.wbContent}>{entry.content}</td>
+                </tr>
+              ))}
+              {entries.length === 0 ? (
+                <tr><td colSpan={4} className={css.wbEmpty}>{t('wbNoMatch')}</td></tr>
+              ) : null}
+            </tbody>
+          </table>
         </div>
       )
     }
@@ -516,19 +686,60 @@ export function NovelProjectExplorer({ useStore, actions, read, api, useSessions
     const scripts = cardScripts(character.extensions)
     const enabledScripts = scripts.filter(script => script.enabled).length
     return (
-      <div>
-        <h4 className={css.detailTitle}>{character.name}</h4>
-        {avatar[character.id] === undefined ? null : (
-          <img className={css.avatar} src={`data:image/png;base64,${avatar[character.id]}`} alt={character.name} />
+      <div className={css.charEditor}>
+        <div className={css.charHeader}>
+          {avatar[character.id] === undefined ? (
+            <span className={css.charAvatarFallback}>{character.name.slice(0, 1) || '🧑'}</span>
+          ) : (
+            <img className={css.charAvatar} src={`data:image/png;base64,${avatar[character.id]}`} alt={character.name} />
+          )}
+          <div className={css.charTitleBlock}>
+            <h4 className={css.detailTitle}>{character.name}</h4>
+            <p className={css.muted}>
+              {character.format}{character.hasAvatar ? ` · ${t('hasAvatar')}` : ''}
+              {character.tags.length === 0 ? '' : ` · ${character.tags.join('、')}`}
+            </p>
+          </div>
+          <span className={css.paneHeaderSpacer} />
+          <button type="button" className={css.dangerButton} onClick={() => deleteCharacter(character.id, character.name)}>
+            {t('deleteCharacterAction')}
+          </button>
+        </div>
+        <div className={css.charSections}>
+          <section className={css.charField}>
+            <h5 className={css.detailTitle}>{t('charDescription')}</h5>
+            <p className={css.charFieldBody}>{character.description.length === 0 ? t('emptyField') : character.description}</p>
+          </section>
+          <section className={css.charField}>
+            <h5 className={css.detailTitle}>{t('charPersonality')}</h5>
+            <p className={css.charFieldBody}>{character.personality.length === 0 ? t('emptyField') : character.personality}</p>
+          </section>
+          <section className={css.charField}>
+            <h5 className={css.detailTitle}>{t('charScenario')}</h5>
+            <p className={css.charFieldBody}>{character.scenario.length === 0 ? t('emptyField') : character.scenario}</p>
+          </section>
+          <section className={css.charField}>
+            <h5 className={css.detailTitle}>{t('charMesExample')}</h5>
+            <p className={css.charFieldBody}>{character.mesExample.length === 0 ? t('emptyField') : character.mesExample}</p>
+          </section>
+        </div>
+        {character.greetings.length === 0 ? null : (
+          <section className={css.charGreetings}>
+            <h5 className={css.detailTitle}>{t('charGreetings')}</h5>
+            <ul className={css.homeList}>
+              {character.greetings.map((greeting, index) => (
+                <li key={index} className={css.detailItem}>
+                  <span className={css.badgeKind}>{t('greetingOption', { number: index + 1 })}</span>
+                  <span className={css.greetingPreview}>{greeting.slice(0, 120)}{greeting.length > 120 ? '…' : ''}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
         )}
-        <p className={css.muted}>{character.format}{character.hasAvatar ? ` · ${t('hasAvatar')}` : ''}</p>
-        <button type="button" className={css.dangerButton} onClick={() => deleteCharacter(character.id, character.name)}>
-          {t('deleteCharacterAction')}
-        </button>
         {scripts.length === 0 ? null : (
-          <div className={css.scriptBox}>
+          <section className={css.charGreetings}>
             <h5 className={css.detailTitle}>{t('cardScripts', { count: scripts.length, enabled: enabledScripts })}</h5>
-            <ul className={css.detailList}>
+            <ul className={css.homeList}>
               {scripts.map((script, index) => (
                 <li key={index} className={css.detailItem}>
                   <span className={css.scriptBadges}>
@@ -539,15 +750,18 @@ export function NovelProjectExplorer({ useStore, actions, read, api, useSessions
                   </span>
                   <strong>{script.name}</strong>
                   {script.kind === 'regex' && script.findRegex.length > 0 ? (
-                    <span className={css.muted}>{`/${script.findRegex.slice(0, 48)}${script.findRegex.length > 48 ? '…' : ''}`}</span>
+                    <span className={css.muted}>{`/${script.findRegex.slice(0, 64)}${script.findRegex.length > 64 ? '…' : ''}`}</span>
                   ) : null}
                 </li>
               ))}
             </ul>
-          </div>
+          </section>
         )}
         {Object.keys(character.extensions).length === 0 ? null : (
-          <pre className={css.extensions}>{JSON.stringify(character.extensions, null, 2)}</pre>
+          <details className={css.extDetails}>
+            <summary className={css.extSummary}>{t('charExtensions')}</summary>
+            <pre className={css.extensions}>{JSON.stringify(character.extensions, null, 2)}</pre>
+          </details>
         )}
       </div>
     )
@@ -614,6 +828,14 @@ export function NovelProjectExplorer({ useStore, actions, read, api, useSessions
             ) : (
               <>
                 <div className={css.treeGroupTitle}><span className={css.treeMarker}>🍺</span>{t('tavernTab')}</div>
+                <button
+                  type="button"
+                  className={selection.type === 'root' ? `${css.treeItem} ${css.treeItemActive}` : css.treeItem}
+                  onClick={() => setSelection({ type: 'root' })}
+                >
+                  <span className={css.treeMarker}>🏠</span>
+                  <span className={css.treeLabel}>{t('libraryHome')}</span>
+                </button>
                 {tree === null ? null : (
                   <>
                     {tree.worldbooks.map(book => (
@@ -632,7 +854,12 @@ export function NovelProjectExplorer({ useStore, actions, read, api, useSessions
                       </div>
                     ))}
                     {tree.characters.map(character => (
-                      <button key={character.id} type="button" className={css.treeItem} onClick={() => selectCharacter(character)}>
+                      <button
+                        key={character.id}
+                        type="button"
+                        className={selection.type === 'character' && selection.character.id === character.id ? `${css.treeItem} ${css.treeItemActive}` : css.treeItem}
+                        onClick={() => selectCharacter(character)}
+                      >
                         <span className={css.treeMarker}>🧑</span>
                         <span className={css.treeLabel}>{character.name}</span>
                         <span className={css.treeCount}>{character.format}</span>
@@ -640,139 +867,6 @@ export function NovelProjectExplorer({ useStore, actions, read, api, useSessions
                     ))}
                   </>
                 )}
-                <div className={css.importBox}>
-                  <h4 className={css.detailTitle}>{t('importSection')}</h4>
-                  <label className={css.fileRow}>
-                    <span className={css.treeLabel}>{t('importCharacter')}</span>
-                    <input
-                      type="file"
-                      accept=".png,.json"
-                      aria-label={t('importCharacterFile')}
-                      disabled={busy}
-                      onChange={onCharacterFile}
-                    />
-                  </label>
-                  <p className={css.status}>{t('importCharacterHint')}</p>
-                  <label className={css.fileRow}>
-                    <span className={css.treeLabel}>{t('importWorldBook')}</span>
-                    <input
-                      type="file"
-                      accept=".json,application/json"
-                      aria-label={t('importWorldBookFile')}
-                      disabled={busy}
-                      onChange={onWorldBookFile}
-                    />
-                  </label>
-                  <p className={css.status}>{t('importWorldBookHint')}</p>
-                  <textarea
-                    className={css.pasteArea}
-                    aria-label={t('importWorldBookPaste')}
-                    placeholder={t('importWorldBookPaste')}
-                    value={worldBookDraft}
-                    disabled={busy}
-                    onChange={event => setWorldBookDraft(event.target.value)}
-                  />
-                  <button type="button" className={css.actionButton} disabled={busy} onClick={importWorldBookDraft}>
-                    {busy ? t('importing') : t('importAction')}
-                  </button>
-                  <h4 className={css.detailTitle}>{t('importPreset')}</h4>
-                  <label className={css.fileRow}>
-                    <span className={css.treeLabel}>{t('importPresetFile')}</span>
-                    <input
-                      type="file"
-                      accept=".json,application/json"
-                      aria-label={t('importPresetFile')}
-                      disabled={busy}
-                      onChange={onPresetFile}
-                    />
-                  </label>
-                  <p className={css.status}>{t('importPresetHint')}</p>
-                  <textarea
-                    className={css.pasteArea}
-                    aria-label={t('importPresetPaste')}
-                    placeholder={t('importPresetPaste')}
-                    value={presetDraft}
-                    disabled={busy}
-                    onChange={event => setPresetDraft(event.target.value)}
-                  />
-                  <button type="button" className={css.actionButton} disabled={busy} onClick={importPresetDraft}>
-                    {busy ? t('importing') : t('importPresetAction')}
-                  </button>
-                  {presets.length === 0 ? null : (
-                    <ul className={css.detailList}>
-                      {presets.map(preset => (
-                        <li key={preset.id} className={css.entryCard}>
-                          <strong>{preset.name}</strong>
-                          <span className={css.muted}>{t('presetCount', { enabled: preset.enabledCount, total: preset.promptCount })}</span>
-                          <button type="button" className={css.dangerButton} disabled={busy} onClick={() => deletePreset(preset.id, preset.name)}>
-                            {t('deletePresetAction')}
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-                <div className={css.roleplay}>
-                  <h4 className={css.detailTitle}>{t('startRoleplay')}</h4>
-                  <select aria-label={t('selectSession')} value={sessionId} onChange={event => setSessionId(event.target.value)}>
-                    <option value="">{t('chooseSession')}</option>
-                    {sessions.ids.map(id => (
-                      <option key={id} value={id}>{sessions.byId[id]?.title ?? t('sessionTitle')}</option>
-                    ))}
-                  </select>
-                  <div className={css.characterPicker}>
-                    {tree?.characters.map(character => (
-                      <label key={character.id} className={css.pickRow}>
-                        <input
-                          type="checkbox"
-                          checked={characterIds.includes(character.id)}
-                          onChange={() => setCharacterIds(current =>
-                            current.includes(character.id)
-                              ? current.filter(id => id !== character.id)
-                              : [...current, character.id])}
-                        />
-                        <span className={css.treeLabel}>{character.name}</span>
-                      </label>
-                    ))}
-                  </div>
-                  <div className={css.roleplayActions}>
-                    <button type="button" className={css.actionButton} onClick={() => runRoleplay(() => api.tavern.startRoleplay({
-                      sessionId: sessionId as never,
-                      characterIds: characterIds as never,
-                      worldbookIds: tree?.worldbooks.map(book => book.id) ?? [],
-                    }).then((result) => { if (!result.result.ok) throw new Error(result.result.error.message) }))}>
-                      {t('startRoleplay')}
-                    </button>
-                    <button type="button" className={css.actionButton} onClick={() => runRoleplay(() => api.tavern.stopRoleplay({
-                      sessionId: sessionId as never,
-                    }).then((result) => { if (!result.result.ok) throw new Error(result.result.error.message) }))}>
-                      {t('stopRoleplay')}
-                    </button>
-                    {binding === null ? null : (
-                      <button type="button" className={css.actionButton} disabled={busy} onClick={unbindSession}>
-                        {t('unbind')}
-                      </button>
-                    )}
-                  </div>
-                  {sessionId === '' || binding === null ? null : (
-                    <>
-                      <p className={css.status}>
-                        {binding.mode === 'tavern'
-                          ? t('boundSummary', {
-                            characters: (binding.characterIds ?? (binding.characterId === null ? [] : [binding.characterId]))
-                              .map(id => tree?.characters.find(card => card.id === id)?.name ?? id)
-                              .join('、') || t('noBoundDetail'),
-                            books: binding.worldbookIds
-                              .map(id => tree?.worldbooks.find(book => book.id === id)?.name ?? id)
-                              .join('、') || t('noBoundWorldbooks'),
-                          })
-                          : t('boundNovel')}
-                      </p>
-                      <p className={css.status}>{t('unbindHint')}</p>
-                    </>
-                  )}
-                  <p className={css.status}>{t('roleplayHint')}</p>
-                </div>
               </>
             )}
           </nav>

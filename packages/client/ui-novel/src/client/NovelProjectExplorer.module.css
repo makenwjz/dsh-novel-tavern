@@ -207,7 +207,258 @@
   font-size: 18px;
   font-weight: 600;
   color: var(--gi-gold-bright);
-  letter-spacing: 0.06em;
+  letter-spacing: 0.02em;
+}
+
+.paneHeaderSpacer {
+  flex: 1;
+}
+
+.treeItemActive {
+  background: #232c3b;
+}
+
+/* ── library home (imports + presets + roleplay, full width) ─────────────── */
+
+.home {
+  display: flex;
+  flex-direction: column;
+  gap: 26px;
+  max-width: 860px;
+}
+
+.homeSection {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.importCards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.importCard {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  border: 1px solid var(--gi-line);
+  border-radius: 10px;
+  background: #1d232d;
+}
+
+.importCard strong {
+  color: var(--gi-cream);
+  font-size: 14px;
+}
+
+.homeList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* ── worldbook detail: SillyTavern-style World Info table ────────────────── */
+
+.wbDetail {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.wbHeader {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.searchBox {
+  flex: none;
+  width: 220px;
+  padding: 6px 10px;
+  border: 1px solid var(--gi-line);
+  border-radius: 8px;
+  background: #1f2631;
+  color: var(--gi-cream);
+  font: inherit;
+  font-size: 12px;
+}
+
+.searchBox:focus {
+  outline: none;
+  border-color: var(--gi-gold);
+}
+
+.wbTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.wbTable th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--gi-line-strong);
+  background: #171c24;
+  color: var(--gi-cream-3);
+  text-align: left;
+  font-weight: 600;
+}
+
+.wbTable td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--gi-line);
+  vertical-align: top;
+  color: var(--gi-cream-2);
+  line-height: 18px;
+}
+
+.wbTable tr:hover td {
+  background: #1b212b;
+}
+
+.wbRowOff td {
+  opacity: 0.5;
+}
+
+.wbThToggle {
+  width: 34px;
+}
+
+.wbThName {
+  width: 22%;
+}
+
+.wbThKeys {
+  width: 18%;
+}
+
+.wbThContent {
+  width: 60%;
+}
+
+.wbName {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.wbName strong {
+  color: var(--gi-cream);
+}
+
+.wbEmpty {
+  text-align: center;
+  color: var(--gi-cream-3);
+  padding: 20px;
+}
+
+/* ── character detail: SillyTavern-style character editor ───────────────── */
+
+.charEditor {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 900px;
+}
+
+.charHeader {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.charAvatar {
+  flex: none;
+  width: 84px;
+  height: 84px;
+  border-radius: 14px;
+  border: 1px solid var(--gi-line-strong);
+  object-fit: cover;
+  background: #1f2631;
+}
+
+.charAvatarFallback {
+  flex: none;
+  width: 84px;
+  height: 84px;
+  border-radius: 14px;
+  border: 1px solid var(--gi-line-strong);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #232c3b;
+  color: var(--gi-gold-bright);
+  font-size: 34px;
+}
+
+.charTitleBlock h4 {
+  margin-bottom: 4px;
+}
+
+.charSections {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 14px;
+}
+
+.charField {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  border: 1px solid var(--gi-line);
+  border-radius: 10px;
+  background: #1d232d;
+}
+
+.charField h5 {
+  margin: 0;
+  color: var(--gi-gold-bright);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.charFieldBody {
+  margin: 0;
+  color: var(--gi-cream-2);
+  font-size: 12px;
+  line-height: 19px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.charGreetings {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.greetingPreview {
+  color: var(--gi-cream-3);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.extDetails {
+  border: 1px solid var(--gi-line);
+  border-radius: 10px;
+  background: #1d232d;
+}
+
+.extSummary {
+  cursor: pointer;
+  padding: 10px 14px;
+  color: var(--gi-gold-bright);
+  font-size: 12px;
+  user-select: none;
 }
 
 .hint {

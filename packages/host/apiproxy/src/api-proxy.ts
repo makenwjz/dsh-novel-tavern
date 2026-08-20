@@ -3436,6 +3436,11 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
               extensions: character.extensions,
               hasAvatar: character.hasAvatar,
               greetings: [...character.greetings],
+              description: character.description,
+              personality: character.personality,
+              scenario: character.scenario,
+              mesExample: character.mesExample,
+              tags: [...character.tags],
             })),
           })
         } catch (error: unknown) {

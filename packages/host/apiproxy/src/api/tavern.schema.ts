@@ -300,6 +300,11 @@ export const tavernProjectTreeValueSchema = z.object({
     extensions: z.record(z.string(), z.unknown()),
     hasAvatar: z.boolean(),
     greetings: z.array(z.string()),
+    description: z.string(),
+    personality: z.string(),
+    scenario: z.string(),
+    mesExample: z.string(),
+    tags: z.array(z.string()),
   })),
 }) as unknown as z.ZodType<Wire<ResponseValue<'tavern.projectTree'>>>
 

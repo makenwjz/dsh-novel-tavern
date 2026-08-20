@@ -52,7 +52,7 @@ function tavernApi() {
     worldbooks: [{
       id: 'worldbook-1',
       name: '剑冢设定',
-      entries: [{ keys: ['剑'], content: '埋着断剑。', comment: '地点' }],
+      entries: [{ name: '', keys: ['剑'], content: '埋着断剑。', comment: '地点', enabled: true }],
     }],
     characters: [{
       id: 'character-1',
@@ -60,6 +60,12 @@ function tavernApi() {
       format: 'json',
       extensions: {},
       hasAvatar: false,
+      greetings: ['开场白一', '开场白二'],
+      description: '冷面剑修',
+      personality: '寡言',
+      scenario: '黄昏的剑冢',
+      mesExample: '阿雅: 剑不是用来问的。',
+      tags: ['剑修'],
     }],
   }))
   api.binding.mockResolvedValue(ok({ binding: null }))
@@ -191,6 +197,12 @@ describe('tavern explorer surface', () => {
         name: '阿雅',
         format: 'png',
         hasAvatar: false,
+        greetings: [],
+        description: '',
+        personality: '',
+        scenario: '',
+        mesExample: '',
+        tags: [],
         extensions: {
           regex_scripts: [
             { scriptName: '正文美化', disabled: false, findRegex: '<now_plot>.*</now_plot>' },
