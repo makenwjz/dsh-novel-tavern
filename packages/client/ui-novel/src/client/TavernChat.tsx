@@ -246,6 +246,13 @@ function RichFrame({ srcDoc, title, bridge }: {
 
   const height = manualHeight ?? autoHeight ?? 440
   const capped = Math.min(height, window.innerHeight - 120)
+  // The card's beautification scripts wrap their markup in Markdown code
+  // fences and <content> tags; strip those display leftovers so the rendered
+  // page starts at the real <!DOCTYPE html> instead of a stray "```text".
+  const cleaned = srcDoc
+    .replace(/^\s*```(?:html|text|markdown|xml)?\s*$/gm, '')
+    .replace(/^<content>\s*/i, '')
+    .replace(/\s*<\/content>\s*$/i, '')
 
   return (
     <div className={css.richWrap}>
@@ -254,7 +261,7 @@ function RichFrame({ srcDoc, title, bridge }: {
         className={css.richFrame}
         sandbox="allow-scripts"
         title={title}
-        srcDoc={`${cardBridgeShim(bridge)}\n${srcDoc}`}
+        srcDoc={`${cardBridgeShim(bridge)}\n${cleaned}`}
         style={{ height: `${capped}px` }}
       />
       <div
