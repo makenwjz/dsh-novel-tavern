@@ -77,6 +77,7 @@ export function renderPresetSection(
   preset: { readonly name: string; readonly sections: readonly PresetSection[] },
   characters: readonly CharacterProfile[],
   loreBlock: string,
+  persona = '',
 ): string {
   const character = characters[0]
   const parts: string[] = []
@@ -86,6 +87,8 @@ export function renderPresetSection(
       const marker = section.content.trim().toLowerCase()
       if (marker === 'worldinfobefore' || marker === 'worldinfoafter') {
         if (loreBlock.length > 0) parts.push(loreBlock.trimEnd())
+      } else if (marker === 'personadescription') {
+        if (persona.length > 0) parts.push(`## 用户设定（{{user}} 的 Persona）\n${persona}`)
       } else if (character !== undefined) {
         if (marker === 'chardescription') {
           if (character.description.length > 0) parts.push(`## 角色介绍\n${character.description}`)
@@ -233,8 +236,13 @@ export function renderTavernSection(input: {
   openingPresent?: boolean
   mvuVariables?: Readonly<Record<string, string>>
   preset?: { readonly name: string; readonly sections: readonly PresetSection[] } | null
+  persona?: string
 }): string {
   const lean = input.lean === true
+  const persona = input.persona === undefined || input.persona.trim().length === 0 ? '' : input.persona.trim()
+  const personaBlock = persona.length === 0
+    ? ''
+    : '\n## 用户设定（{{user}} 的 Persona）\n' + persona + '\n'
   const entries = input.activated.filter(item => item.entry.content.length > 0)
   const loreBlock = entries.length === 0
     ? ''
@@ -242,13 +250,13 @@ export function renderTavernSection(input: {
       + entries.map(item => `- 《${item.bookName}》：${item.entry.content}`).join('\n')
       + '\n'
   if (input.preset !== null && input.preset !== undefined) {
-    return renderPresetSection(input.preset, input.characters, loreBlock)
+    return renderPresetSection(input.preset, input.characters, loreBlock, persona)
   }
-  if (input.binding.mode === 'novel' || input.characters.length === 0) return loreBlock
+  if (input.binding.mode === 'novel' || input.characters.length === 0) return loreBlock + personaBlock
   const substituted = input.characters.map(character => substituteProfile(character))
   if (substituted.length === 1) {
-    return fullCharacterBlock(substituted[0]!, lean, loreBlock, input.openingPresent === true, input.mvuVariables)
+    return fullCharacterBlock(substituted[0]!, lean, loreBlock, input.openingPresent === true, input.mvuVariables) + personaBlock
   }
   const blocks = substituted.map(character => extraCharacterBlock(character))
-  return `${blocks.join('\n')}\n${loreBlock}`
+  return `${blocks.join('\n')}\n${loreBlock}${personaBlock}`
 }

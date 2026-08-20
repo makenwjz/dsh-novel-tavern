@@ -58,6 +58,8 @@ import {
   tavernBindingValueSchema,
   tavernSetGreetingValueSchema,
   tavernSetMvuValueSchema,
+  tavernSetPersonaValueSchema,
+  tavernImportChatValueSchema,
   tavernScoreCharacterValueSchema,
   tavernProjectTreeValueSchema,
   tavernCharacterImageValueSchema,
@@ -188,6 +190,8 @@ export interface IApiClient {
     advanceStage(payload: RequestPayload<'tavern.advanceStage'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'tavern.advanceStage'>>>
     setGreeting(payload: RequestPayload<'tavern.setGreeting'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'tavern.setGreeting'>>>
     setMvu(payload: RequestPayload<'tavern.setMvu'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'tavern.setMvu'>>>
+    setPersona(payload: RequestPayload<'tavern.setPersona'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'tavern.setPersona'>>>
+    importChat(payload: RequestPayload<'tavern.importChat'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'tavern.importChat'>>>
     scoreCharacter(payload: RequestPayload<'tavern.scoreCharacter'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'tavern.scoreCharacter'>>>
     projectTree(payload: RequestPayload<'tavern.projectTree'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'tavern.projectTree'>>>
     characterImage(payload: RequestPayload<'tavern.characterImage'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'tavern.characterImage'>>>
@@ -278,6 +282,8 @@ const UNARY_VALUE_SCHEMAS: { [K in keyof RpcMethodMap]: z.ZodType<Wire<ResponseV
   'tavern.advanceStage': tavernAdvanceStageValueSchema,
   'tavern.setGreeting': tavernSetGreetingValueSchema,
   'tavern.setMvu': tavernSetMvuValueSchema,
+  'tavern.setPersona': tavernSetPersonaValueSchema,
+  'tavern.importChat': tavernImportChatValueSchema,
   'tavern.scoreCharacter': tavernScoreCharacterValueSchema,
   'tavern.projectTree': tavernProjectTreeValueSchema,
   'tavern.characterImage': tavernCharacterImageValueSchema,
@@ -570,6 +576,8 @@ export abstract class AbstractApiClient implements IApiClient {
     advanceStage: (payload, signal) => this.callUnary('tavern.advanceStage', payload, signal),
     setGreeting: (payload, signal) => this.callUnary('tavern.setGreeting', payload, signal),
     setMvu: (payload, signal) => this.callUnary('tavern.setMvu', payload, signal),
+    setPersona: (payload, signal) => this.callUnary('tavern.setPersona', payload, signal),
+    importChat: (payload, signal) => this.callUnary('tavern.importChat', payload, signal),
     scoreCharacter: (payload, signal) => this.callUnary('tavern.scoreCharacter', payload, signal),
     projectTree: (payload, signal) => this.callUnary('tavern.projectTree', payload, signal),
     characterImage: (payload, signal) => this.callUnary('tavern.characterImage', payload, signal),

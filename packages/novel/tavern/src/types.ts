@@ -209,6 +209,8 @@ export interface TavernBindingData {
   /** The imported prompt preset whose ordered sections assemble this session's
    *  prompt (a SillyTavern Chat Completion Preset). */
   readonly presetId?: PromptPresetId
+  /** The user persona text, injected into the prompt (SillyTavern Persona). */
+  readonly persona?: string
 }
 
 /** One dangling binding reference found by the invariant check. */

@@ -1,30 +1,25 @@
 /* Fullscreen novel + tavern project explorer and the draggable floating seal.
-   Genshin-style: deep navy canvas, gold trim, serif display type, ornate
-   corner flourishes on panels. The palette is scoped here so the overlay looks
-   the same on any app theme. */
+   Clean modern dark surface: flat panels, one indigo accent, system sans. */
 
 .explorer {
-  --gi-ink: #0b1220;
-  --gi-ink-2: #111c30;
-  --gi-ink-3: #1a2942;
-  --gi-gold: #c9a25e;
-  --gi-gold-bright: #e7c98c;
-  --gi-cream: #efe7d4;
-  --gi-cream-2: #c9bda2;
-  --gi-cream-3: #94896f;
-  --gi-line: rgba(201, 162, 94, 0.30);
-  --gi-line-strong: rgba(201, 162, 94, 0.58);
-  --gi-display: Georgia, 'Times New Roman', 'Songti SC', 'Noto Serif SC', 'SimSun', serif;
+  --gi-ink: #14181f;
+  --gi-ink-2: #171c24;
+  --gi-ink-3: #1f2631;
+  --gi-gold: #8b9cf7;
+  --gi-gold-bright: #aeb9fb;
+  --gi-cream: #e8edf4;
+  --gi-cream-2: #aab4c3;
+  --gi-cream-3: #7b8696;
+  --gi-line: rgba(49, 59, 77, 0.9);
+  --gi-line-strong: #4a5478;
+  --gi-display: -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif;
 
   position: fixed;
   inset: 0;
   z-index: 1100;
   display: flex;
   flex-direction: column;
-  background:
-    radial-gradient(120% 80% at 85% 0%, rgba(201, 162, 94, 0.12), transparent 55%),
-    radial-gradient(100% 70% at 0% 100%, rgba(60, 90, 140, 0.16), transparent 55%),
-    linear-gradient(180deg, #0d1626, #0a1120);
+  background: #14181f;
   color: var(--gi-cream);
   font-family: var(--gi-display);
 }
@@ -34,10 +29,6 @@
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background-image:
-    linear-gradient(rgba(201, 162, 94, 0.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(201, 162, 94, 0.04) 1px, transparent 1px);
-  background-size: 34px 34px;
 }
 
 .header {
@@ -47,17 +38,17 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 60px;
+  height: 56px;
   padding: 0 22px;
-  border-bottom: 1px solid var(--gi-line-strong);
-  background: linear-gradient(180deg, rgba(26, 41, 66, 0.7), transparent);
+  border-bottom: 1px solid #262e3b;
+  background: #171c24;
 }
 
 .title {
   margin: 0;
-  font-size: 20px;
+  font-size: 17px;
   font-weight: 600;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.04em;
   color: var(--gi-gold-bright);
   text-shadow: 0 1px 0 rgba(0, 0, 0, 0.4);
 }
@@ -242,12 +233,13 @@
   padding: 10px 14px;
   border: 1px solid var(--gi-line);
   border-radius: 8px;
-  background: rgba(17, 28, 48, 0.65);
+  background: #1d232d;
   font-size: 13px;
 }
 
 .detailItem strong {
   color: var(--gi-cream);
+  font-size: 13px;
 }
 
 .detailItem span {
@@ -257,6 +249,37 @@
   overflow-wrap: anywhere;
 }
 
+.scriptBadges {
+  display: flex;
+  gap: 6px;
+}
+
+.badgeOn,
+.badgeOff,
+.badgeKind {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 18px;
+}
+
+.badgeOn {
+  background: rgba(127, 201, 143, 0.14);
+  color: #7fc98f;
+}
+
+.badgeOff {
+  background: rgba(126, 140, 158, 0.14);
+  color: #7b8696;
+}
+
+.badgeKind {
+  background: rgba(139, 156, 247, 0.14);
+  color: #aeb9fb;
+}
+
 .entryCard {
   display: flex;
   flex-direction: column;
@@ -264,7 +287,7 @@
   padding: 10px 14px;
   border: 1px solid var(--gi-line);
   border-radius: 8px;
-  background: rgba(17, 28, 48, 0.65);
+  background: #1d232d;
 }
 
 .entryCard strong {
@@ -340,7 +363,7 @@
   padding: 14px;
   border: 1px solid var(--gi-line-strong);
   border-radius: 10px;
-  background: linear-gradient(180deg, rgba(201, 162, 94, 0.08), rgba(13, 21, 36, 0.5));
+  background: #1f2631;
 }
 
 .roleplay select {

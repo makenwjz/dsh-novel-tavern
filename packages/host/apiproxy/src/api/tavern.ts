@@ -123,6 +123,18 @@ export interface TavernApi {
   setMvu(request: RpcRequest<{ sessionId: SessionId; variables: Record<string, string> }>): Promise<RpcResponse<{ binding: TavernBindingWire }>>
 
   /**
+   * Replace one session's user persona (SillyTavern Persona).
+   * @returns the resulting binding.
+   */
+  setPersona(request: RpcRequest<{ sessionId: SessionId; persona: string }>): Promise<RpcResponse<{ binding: TavernBindingWire }>>
+
+  /**
+   * Import a SillyTavern Chat JSONL export into a fresh attached session.
+   * @returns how many messages were imported.
+   */
+  importChat(request: RpcRequest<{ sessionId: SessionId; content: string }>): Promise<RpcResponse<{ imported: number }>>
+
+  /**
    * Model-assess one character card's quality through the LLM service.
    * @returns the structured score.
    */

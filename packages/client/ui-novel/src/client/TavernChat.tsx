@@ -9,7 +9,7 @@
  * @module @deepseek-ai/dsh-client-ui-novel/TavernChat
  */
 
-import { useEffect, useRef, useState, type FormEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react'
 import type { IApiClient } from '@deepseek-ai/dsh-api-remotes/client'
 import type { SessionListState } from '@deepseek-ai/dsh-client-runtime/client'
 import type { SnapshotSelectorHook } from '@deepseek-ai/dsh-client-ui-slots'
@@ -50,6 +50,8 @@ type ChatSummary = {
   readonly characterIds: CharacterId[]
   /** The bound prompt preset (SillyTavern Chat Completion Preset) id, or null. */
   readonly presetId: string | null
+  /** The session's user persona text. */
+  readonly persona: string
   /** Worldbook entry names this session keeps disabled (driven by the card frontend). */
   readonly disabledEntryNames: string[]
   /** The session's MVU variable state (card variables, injected into the prompt). */
@@ -184,6 +186,13 @@ function applyMvuPatchesFromText(text: string, vars: Record<string, string>): Re
     } catch { /* malformed patch: skip */ }
   }
   return out
+}
+
+/** The speaker name a card-style message opens with, e.g. `{艾玛}「……」`
+ *  or `{艾玛}：……`. Returns null when the message carries no speaker marker. */
+function speakerOf(text: string): string | null {
+  const match = /^\{([^{}\n]{1,24})\}[\s：:—-]?/u.exec(text.trim())
+  return match?.[1]?.trim().length ? match[1].trim() : null
 }
 
 /** One auto-sizing, user-resizable sandboxed frame for a card-rendered message.
@@ -466,6 +475,133 @@ export function TavernChat({ api, t, useSessions, onNeedLibrary, focusSession }:
     }, () => {})
   }
 
+  /** Save the active session's user persona. */
+  const savePersona = (persona: string): void => {
+    const summary = chats.find(chat => chat.sessionId === active)
+    if (summary === undefined) return
+    void api.tavern.setPersona({ sessionId: active as never, persona }).then(result => {
+      if (!result.result.ok) {
+        setError(t('chatError', { reason: result.result.error.message }))
+        return
+      }
+      setChats(previous => previous.map(chat => chat.sessionId === active ? { ...chat, persona } : chat))
+      setNotice(t('personaSaved'))
+    }, () => {})
+  }
+
+  /** Export the current conversation as a SillyTavern Chat JSONL download. */
+  const exportChat = (): void => {
+    const summary = chats.find(chat => chat.sessionId === active)
+    if (summary === undefined) return
+    const lines: string[] = [JSON.stringify({ chat_metadata: {}, char_name: summary.characterName, create_date: new Date().toISOString() })]
+    for (const row of rows) {
+      if (row.role === 'user') {
+        lines.push(JSON.stringify({ name: 'User', is_user: true, is_system: false, mes: row.text, send_date: row.time }))
+      } else {
+        lines.push(JSON.stringify({ name: speakerOf(row.text) ?? summary.characterName, is_user: false, is_system: false, mes: row.text, send_date: row.time }))
+      }
+    }
+    const blob = new Blob([lines.join('\n')], { type: 'application/x-ndjson' })
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = `${summary.characterName}.jsonl`
+    anchor.click()
+    URL.revokeObjectURL(url)
+    setNotice(t('chatExported'))
+  }
+
+  /** Import a SillyTavern Chat JSONL file into the active (fresh) session. */
+  const onChatImportFile = (event: ChangeEvent<HTMLInputElement>): void => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (file === undefined || active === '' || sending) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      void api.tavern.importChat({ sessionId: active as never, content: String(reader.result ?? '') }).then(result => {
+        const r = result.result
+        if (!r.ok) {
+          setError(t('chatError', { reason: r.error.message }))
+          return
+        }
+        setNotice(t('chatImported', { count: r.value.imported }))
+        reloadHistory()
+      }, (reason: unknown) => {
+        setError(t('chatError', { reason: reason instanceof Error ? reason.message : String(reason) }))
+      })
+    }
+    reader.readAsText(file)
+  }
+
+  /** Fork the session before one reply and regenerate it from the preceding
+   *  user message — SillyTavern's "swipe/regenerate" branch behavior. */
+  const rewriteReply = (row: ChatRow): void => {
+    if (sending || active === '') return
+    const summary = chats.find(chat => chat.sessionId === active)
+    if (summary === undefined) return
+    // The user message that precedes this reply in the visible history.
+    const priorUser = [...rows].reverse().find(candidate => candidate.role === 'user' && candidate.seq < row.seq)
+    if (priorUser === undefined) return
+    setSending(true)
+    setError('')
+    void api.sessions.fork({ sessionId: active as never, atSeq: row.seq }).then(forkResult => {
+      const f = forkResult.result
+      if (!f.ok) {
+        setSending(false)
+        setError(t('chatError', { reason: f.error.message }))
+        return
+      }
+      const childId = f.value.sessionId
+      void api.sessions.prompt({ sessionId: childId, mode: 'queue', content: [{ type: 'text', text: priorUser.text }] }).then(promptResult => {
+        const p = promptResult.result
+        if (!p.ok) {
+          setSending(false)
+          setError(t('chatError', { reason: p.error.message }))
+          return
+        }
+        setNotice(t('rewriteStarted'))
+        openChildChat(childId, summary)
+      }, (reason: unknown) => {
+        setSending(false)
+        setError(t('chatError', { reason: reason instanceof Error ? reason.message : String(reason) }))
+      })
+    }, (reason: unknown) => {
+      setSending(false)
+      setError(t('chatError', { reason: reason instanceof Error ? reason.message : String(reason) }))
+    })
+  }
+
+  /** Register a forked child session as a chat and open it, polling until the
+   *  regenerated reply lands. */
+  const openChildChat = (sessionId: string, parent: ChatSummary): void => {
+    const child: ChatSummary = {
+      ...parent,
+      sessionId,
+      title: `${parent.title} · ${t('rewriteBranch')}`,
+      presetId: parent.presetId,
+      persona: parent.persona,
+    }
+    setChats(previous => [child, ...previous.filter(chat => chat.sessionId !== sessionId)])
+    setActive(sessionId)
+    const deadline = Date.now() + 90000
+    const poll = (): void => {
+      void api.sessions.history({ sessionId: sessionId as never, maxMessages: 80 }).then(historyResult => {
+        if (!historyResult.result.ok) { setSending(false); return }
+        const next = toChatRows(historyResult.result.value.events)
+        const lastUser = [...next].reverse().find(candidate => candidate.role === 'user')
+        const hasReply = lastUser !== undefined && next.some(candidate => candidate.role === 'assistant' && candidate.seq > lastUser.seq)
+        if (hasReply || Date.now() > deadline) {
+          setSending(false)
+          setRows(next)
+          syncMvuFromRows(next)
+          return
+        }
+        setTimeout(poll, 1500)
+      }, () => { setSending(false) })
+    }
+    setTimeout(poll, 800)
+  }
+
   /** Replay the model's `<json_patch>` blocks from the loaded rows onto the
    *  session's MVU variables and push the result when anything changed. */
   const syncMvuFromRows = (nextRows: ChatRow[]): void => {
@@ -536,6 +672,7 @@ export function TavernChat({ api, t, useSessions, onNeedLibrary, focusSession }:
           disabledEntryNames: [...(b.disabledEntryNames ?? [])],
           mvuVariables: { ...(b.mvuVariables ?? {}) },
           presetId: b.presetId ?? null,
+          persona: b.persona ?? '',
         })
       }
       setChats(summaries)
@@ -546,6 +683,28 @@ export function TavernChat({ api, t, useSessions, onNeedLibrary, focusSession }:
   }, [api, sessions.ids.join(',')])
 
   /** Load the active session's history and its character portrait. */
+  const reloadHistory = (): void => {
+    if (active === '') {
+      setRows([])
+      return
+    }
+    void api.sessions.history({ sessionId: active as never, maxMessages: 80 }).then((result) => {
+      const r = result.result
+      if (!r.ok) return
+      const next = toChatRows(r.value.events)
+      setRows(next)
+      syncMvuFromRows(next)
+    }, () => { /* the poll path surfaces errors */ })
+    const summary = chats.find(chat => chat.sessionId === active)
+    if (summary?.characterId !== null && summary?.characterId !== undefined && avatars[summary.characterId] === undefined) {
+      void api.tavern.characterImage({ id: summary.characterId as never }).then((result) => {
+        const r = result.result
+        if (!r.ok) return
+        setAvatars(previous => ({ ...previous, [summary.characterId as string]: r.value.bytesB64 }))
+      }, () => {})
+    }
+  }
+
   useEffect(() => {
     if (active === '') {
       setRows([])
@@ -717,6 +876,7 @@ export function TavernChat({ api, t, useSessions, onNeedLibrary, focusSession }:
           disabledEntryNames: [],
           mvuVariables: {},
           presetId: null,
+          persona: '',
         },
       ])
       setActive(sessionId)
@@ -828,6 +988,14 @@ export function TavernChat({ api, t, useSessions, onNeedLibrary, focusSession }:
   const avatarB64 = activeSummary?.characterId === null || activeSummary?.characterId === undefined
     ? undefined
     : avatars[activeSummary.characterId]
+  /** The avatar of the character whose name matches a speaker marker. */
+  const avatarB64Of = (speaker: string): string | undefined => {
+    for (const characterId of activeSummary?.characterIds ?? []) {
+      const card = cards.find(candidate => candidate.id === characterId)
+      if (card?.name === speaker) return avatars[characterId]
+    }
+    return undefined
+  }
   // The chosen opening message of the active chat (SillyTavern greeting loader).
   const greetingIndexForActive = greetingIndex[active] ?? 0
   const greeting = activeSummary !== undefined && activeSummary.greetings.length > 0
@@ -940,6 +1108,34 @@ export function TavernChat({ api, t, useSessions, onNeedLibrary, focusSession }:
                       )
                     })}
                   </fieldset>
+                  <label className={css.resourceField}>
+                    <span>{t('personaPick')}</span>
+                    <textarea
+                      className={css.personaArea}
+                      aria-label={t('personaPick')}
+                      placeholder={t('personaPlaceholder')}
+                      defaultValue={activeSummary.persona}
+                      key={active}
+                      rows={3}
+                    />
+                    <button
+                      type="button"
+                      className={css.resourceSave}
+                      onClick={event => {
+                        const area = (event.target as HTMLButtonElement).parentElement?.querySelector('textarea')
+                        savePersona(area?.value ?? '')
+                      }}
+                    >
+                      {t('personaSave')}
+                    </button>
+                  </label>
+                  <div className={css.resourceActions}>
+                    <label className={css.resourceFile}>
+                      <span>{t('chatImport')}</span>
+                      <input type="file" accept=".jsonl,.ndjson,application/x-ndjson" aria-label={t('chatImport')} disabled={sending} onChange={onChatImportFile} />
+                    </label>
+                    <button type="button" className={css.resourceSave} onClick={exportChat}>{t('chatExport')}</button>
+                  </div>
                 </div>
               </details>
               {activeSummary.greetings.length > 1 ? (
@@ -984,20 +1180,24 @@ export function TavernChat({ api, t, useSessions, onNeedLibrary, focusSession }:
                 const previous = rows[index - 1]
                 const dayBreak = previous === undefined || new Date(previous.time).toDateString() !== new Date(row.time).toDateString()
                 const rich = isRichMessage(row.text, activeSummary.scripts)
+                const speaker = row.role === 'assistant' ? speakerOf(row.text) : null
+                const speakerAvatar = speaker === null ? undefined : avatarB64Of(speaker)
+                const canRewrite = row.role === 'assistant' && rows.some(candidate => candidate.role === 'user' && candidate.seq < row.seq)
                 return (
                   <div key={row.id}>
                     {dayBreak ? <p className={css.daySep}>{new Date(row.time).toLocaleDateString()}</p> : null}
                     <div className={row.role === 'assistant' ? css.bubbleRow : `${css.bubbleRow} ${css.bubbleRowMine}`}>
                       {row.role === 'assistant' ? (
-                        avatarB64 === undefined
+                        speakerAvatar === undefined
                           ? <span className={css.avatarFallback}>{activeSummary.characterName.slice(0, 1) || '🍺'}</span>
-                          : <img className={css.avatar} src={`data:image/png;base64,${avatarB64}`} alt={activeSummary.characterName} />
+                          : <img className={css.avatar} src={`data:image/png;base64,${speakerAvatar}`} alt={speaker ?? activeSummary.characterName} />
                       ) : null}
                       <div className={
                         row.role === 'assistant'
                           ? (rich ? `${css.bubble} ${css.richBubble}` : css.bubble)
                           : `${css.bubble} ${css.bubbleMine}`
                       }>
+                        {speaker === null ? null : <p className={css.speakerLabel}>{speaker}</p>}
                         <MessageBody
                           text={row.text}
                           scripts={activeSummary.scripts}
@@ -1009,6 +1209,11 @@ export function TavernChat({ api, t, useSessions, onNeedLibrary, focusSession }:
                           }}
                         />
                         <time className={css.bubbleTime}>{clockOf(row.time)}</time>
+                        {canRewrite ? (
+                          <button type="button" className={css.rewriteButton} disabled={sending} onClick={() => rewriteReply(row)}>
+                            {t('rewriteReply')}
+                          </button>
+                        ) : null}
                       </div>
                     </div>
                   </div>

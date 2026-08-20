@@ -498,6 +498,8 @@ describe('tavern domain round trip', () => {
         advanceStage: recorder('tavern.advanceStage', r => ok(r, { binding: { mode: 'tavern', worldbookIds: [], characterId: null, stage: 1 } })),
         setGreeting: recorder('tavern.setGreeting', r => ok(r, { appended: true })),
         setMvu: recorder('tavern.setMvu', r => ok(r, { binding: { mode: 'tavern', worldbookIds: [], characterId: null } })),
+        importChat: recorder('tavern.importChat', r => ok(r, { imported: 2 })),
+        setPersona: recorder('tavern.setPersona', r => ok(r, { binding: { mode: 'tavern', worldbookIds: [], characterId: null, persona: r.payload.persona } })),
         setWorldBookEntryEnabled: recorder('tavern.setWorldBookEntryEnabled', r => ok(r, { updated: true })),
         scoreCharacter: recorder('tavern.scoreCharacter', r => ok(r, { score: { overall: 8, clarity: 9, consistency: 7, tokenEfficiency: 6, note: 'ok' } })),
       },

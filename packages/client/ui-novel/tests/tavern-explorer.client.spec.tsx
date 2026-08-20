@@ -42,6 +42,8 @@ function tavernApi() {
     setWorldBookEntryEnabled: vi.fn(),
     setGreeting: vi.fn(),
     setMvu: vi.fn(),
+      setPersona: vi.fn(),
+      importChat: vi.fn(),
     importPromptPreset: vi.fn(),
     listPromptPresets: vi.fn(),
     deletePromptPreset: vi.fn(),

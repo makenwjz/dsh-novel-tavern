@@ -3380,6 +3380,33 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
         }
       },
 
+      async setPersona(request) {
+        const tavern = tavernStore()
+        if ('error' in tavern) return err(request, tavern.error)
+        try {
+          const binding = tavern.setPersona(request.payload.sessionId, request.payload.persona)
+          return ok(request, { binding })
+        } catch (error: unknown) {
+          const message = error instanceof Error ? error.message : String(error)
+          return err(request, { code: 'internal', message, details: {} })
+        }
+      },
+
+      async importChat(request) {
+        const tavern = tavernStore()
+        if ('error' in tavern) return err(request, tavern.error)
+        try {
+          const imported = tavern.importChat(request.payload.sessionId, request.payload.content)
+          return ok(request, { imported })
+        } catch (error: unknown) {
+          const message = error instanceof Error ? error.message : String(error)
+          if (/already has messages|not attached/.test(message)) {
+            return err(request, { code: 'bad-request', message, details: { issues: [] } })
+          }
+          return err(request, { code: 'internal', message, details: {} })
+        }
+      },
+
       async scoreCharacter(request) {
         const tavern = tavernStore()
         if ('error' in tavern) return err(request, tavern.error)

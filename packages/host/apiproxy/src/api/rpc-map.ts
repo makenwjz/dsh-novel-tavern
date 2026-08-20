@@ -83,6 +83,8 @@ export interface RpcMethodMap {
   'tavern.advanceStage': TavernApi['advanceStage']
   'tavern.setGreeting': TavernApi['setGreeting']
   'tavern.setMvu': TavernApi['setMvu']
+  'tavern.setPersona': TavernApi['setPersona']
+  'tavern.importChat': TavernApi['importChat']
   'tavern.scoreCharacter': TavernApi['scoreCharacter']
   'tavern.projectTree': TavernApi['projectTree']
   'tavern.characterImage': TavernApi['characterImage']

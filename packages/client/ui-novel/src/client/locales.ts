@@ -132,6 +132,17 @@ export const zh = {
   presetCount: '启用 {enabled}/{total} 段',
   presetDeleted: '已删除预设「{name}」。',
   deletePresetAction: '删除预设',
+  personaPick: '我的 Persona（{{user}} 的设定）',
+  personaPlaceholder: '例如：我是一名深夜写代码的用户，说话简短直接……',
+  personaSave: '保存 Persona',
+  personaSaved: '已保存 Persona。',
+  chatImport: '导入聊天（ST JSONL）',
+  chatExport: '导出聊天（JSONL）',
+  chatExported: '已导出当前对话。',
+  chatImported: '已导入 {count} 条消息。',
+  rewriteReply: '重写这条回复',
+  rewriteStarted: '正在从这条回复之前分支出新剧情……',
+  rewriteBranch: '分支',
 } satisfies Record<string, string>
 
 /** Novel workspace locale key union. */
@@ -269,4 +280,15 @@ export const en = {
   presetCount: '{enabled}/{total} sections enabled',
   presetDeleted: 'Preset “{name}” deleted.',
   deletePresetAction: 'Delete preset',
+  personaPick: 'My persona ({{user}}’s setup)',
+  personaPlaceholder: 'e.g. I am a user who codes late at night, terse speech…',
+  personaSave: 'Save persona',
+  personaSaved: 'Persona saved.',
+  chatImport: 'Import chat (ST JSONL)',
+  chatExport: 'Export chat (JSONL)',
+  chatExported: 'Conversation exported.',
+  chatImported: '{count} messages imported.',
+  rewriteReply: 'Rewrite this reply',
+  rewriteStarted: 'Forking a branch before this reply…',
+  rewriteBranch: 'branch',
 } satisfies Record<NovelLocaleKey, string>

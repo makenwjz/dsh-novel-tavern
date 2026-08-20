@@ -531,11 +531,16 @@ export function NovelProjectExplorer({ useStore, actions, read, api, useSessions
             <ul className={css.detailList}>
               {scripts.map((script, index) => (
                 <li key={index} className={css.detailItem}>
-                  <strong>{script.name}</strong>
-                  <span>
-                    {script.kind === 'regex' ? t('scriptRegex') : t('scriptHelper')} · {script.enabled ? t('scriptEnabled') : t('scriptDisabled')}
-                    {script.kind === 'regex' && script.findRegex.length > 0 ? ` · /${script.findRegex.slice(0, 48)}…` : ''}
+                  <span className={css.scriptBadges}>
+                    <span className={script.enabled ? css.badgeOn : css.badgeOff}>
+                      {script.enabled ? t('scriptEnabled') : t('scriptDisabled')}
+                    </span>
+                    <span className={css.badgeKind}>{script.kind === 'regex' ? t('scriptRegex') : t('scriptHelper')}</span>
                   </span>
+                  <strong>{script.name}</strong>
+                  {script.kind === 'regex' && script.findRegex.length > 0 ? (
+                    <span className={css.muted}>{`/${script.findRegex.slice(0, 48)}${script.findRegex.length > 48 ? '…' : ''}`}</span>
+                  ) : null}
                 </li>
               ))}
             </ul>

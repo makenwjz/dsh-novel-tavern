@@ -48,6 +48,8 @@ function chatApi() {
       scoreCharacter: vi.fn(),
       setWorldBookEntryEnabled: vi.fn(),
       setMvu: vi.fn(),
+      setPersona: vi.fn(),
+      importChat: vi.fn(),
       importPromptPreset: vi.fn(),
       listPromptPresets: vi.fn(),
       deletePromptPreset: vi.fn(),

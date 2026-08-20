@@ -209,6 +209,7 @@ export class TavernService extends Service {
             openingPresent: hasOpeningMessage(session.events),
             ...(binding.mvuVariables === undefined ? {} : { mvuVariables: binding.mvuVariables }),
             ...(binding.presetId === undefined ? {} : { preset: this.promptPreset(binding.presetId) }),
+            ...(binding.persona === undefined ? {} : { persona: binding.persona }),
           })
           // The card's prompt-side regex scripts hide variable machinery from
           // the model (e.g. "变量更新对AI不可见") and trim repetitive text.
@@ -673,6 +674,87 @@ export class TavernService extends Service {
     const next: TavernBindingData = { ...binding, mvuVariables: { ...variables } }
     session.append('tavern/binding', next)
     return next
+  }
+
+  /**
+   * Replace one session's user persona text (SillyTavern Persona), injected
+   * into the prompt (the `personaDescription` marker / a persona block).
+   * @param sessionId - the attached session to update.
+   * @param persona - the persona text; blank clears it.
+   * @returns the new binding.
+   * @throws when the session is unattached or carries no binding.
+   */
+  setPersona(sessionId: string, persona: string): TavernBindingData {
+    const session = this.ctx.sessions.get(sessionId as SessionId)
+    if (session === undefined) throw new Error(`tavern: session ${JSON.stringify(sessionId)} is not attached`)
+    const binding = foldBinding(session.events)
+    if (binding === null) throw new Error(`tavern: session ${JSON.stringify(sessionId)} has no binding`)
+    const text = persona.trim()
+    const { persona: _dropped, ...rest } = binding
+    const next: TavernBindingData = { ...rest, ...(text.length === 0 ? {} : { persona: text }) }
+    session.append('tavern/binding', next)
+    return next
+  }
+
+  /**
+   * Import a SillyTavern Chat JSONL export into an attached session: the
+   * header row is skipped, then each message row is appended as a user or
+   * assistant message (is_user true → user, else assistant). Malformed rows
+   * are skipped; the conversation must not have started yet.
+   * @param sessionId - the attached session to fill.
+   * @param content - the UTF-8 JSONL text.
+   * @returns how many messages were imported.
+   * @throws when the session is unattached, or the log already has messages.
+   */
+  importChat(sessionId: string, content: string): number {
+    const session = this.ctx.sessions.get(sessionId as SessionId)
+    if (session === undefined) throw new Error(`tavern: session ${JSON.stringify(sessionId)} is not attached`)
+    if (session.events.some(event => event.type === 'user/message' || event.type === 'assistant/message')) {
+      throw new Error('tavern: the session already has messages; import into a fresh session')
+    }
+    const lines = content.replace(/^\uFEFF/u, '').split(/\r?\n/u).map(line => line.trim()).filter(line => line.length > 0)
+    let imported = 0
+    let turn = 0
+    let step = 0
+    for (const [index, line] of lines.entries()) {
+      if (index === 0) continue // header row
+      let row: unknown
+      try {
+        row = JSON.parse(line)
+      } catch {
+        continue
+      }
+      if (typeof row !== 'object' || row === null) continue
+      const record = row as Record<string, unknown>
+      const mes = typeof record.mes === 'string' ? record.mes : ''
+      if (mes.length === 0) continue
+      const isUser = record.is_user === true
+      const messageId = `import-${index}` as never
+      if (isUser) {
+        session.append('user/message', {
+          id: messageId,
+          role: 'user',
+          content: [{ type: 'text', text: mes }],
+          source: { kind: 'user' },
+        }, { surfaceOp: 'append' })
+        turn += 1
+        step = 0
+      } else {
+        session.append('assistant/message', {
+          turn,
+          step,
+          message: {
+            id: messageId,
+            role: 'assistant',
+            content: [{ type: 'text', text: mes }],
+            source: { kind: 'model', provider: 'dsh-tavern', model: 'import' },
+          },
+        }, { surfaceOp: 'append' })
+        step += 1
+      }
+      imported += 1
+    }
+    return imported
   }
 
   /**

@@ -67,8 +67,12 @@ DeepSeek Harness（DSH）本身是一个 **Plugin-based Agent Harness**（基于
 | 世界书条目编辑 | 资料库每条世界书可独立启用/禁用（持久化到存储文件）；卡前端周目切换在会话级覆盖生效 |
 | Prompt Preset | 导入 SillyTavern Chat Completion Preset，按作者顺序组装 prompt：marker（世界书/角色介绍/性格/场景/对话示例）自动解析为对应资源，`{{char}}`/`{{user}}` 宏替换（参考 dsh-rp-distribution） |
 | 卡前端桥接 | 卡的封面脚本调用的 SillyTavern API（`getChatMessages`/`setChatMessage`/`setWorldbookEntry`/`updateWorldbookWith`/`showToast`）由桥接 shim 映射到 DSH：**进入魔女监牢 = 切换开场白；一周目/二周目切换 = 按条目名启用/禁用世界书**（会话级，不硬编码卡规则） |
+| 会话资源 | 聊天头部「会话资源」面板：Prompt 预设下拉、**世界书多选勾选**、**我的 Persona 编辑**、聊天导入（ST JSONL）/导出 |
+| 多说话人署名 | 多角色会话中，消息以 `{名字}` 开头时自动标注说话人并切换对应角色头像 |
+| 分支重写 | 每条角色回复带「重写」按钮：从该回复之前 fork 子会话并重新生成（SillyTavern 刷回复行为），父会话原样保留 |
 | 会话管理 | 解除绑定 / 删除对话（归档）、错误提示点名绑定会话并可一键跳转 |
-| 脚本清单 | 资料库角色卡详情展示卡携带的正则脚本/辅助脚本列表 |
+| 脚本清单 | 资料库角色卡详情以徽章形式展示卡携带的正则脚本/辅助脚本（启用/禁用/类型） |
+| UI | 干净现代暗色界面（原神金 → 中性底 + 靛蓝强调），统一聊天/资料库观感 |
 
 ---
 
@@ -212,9 +216,10 @@ dsh plugin --profile web add <npm包名>
 
 ### 后续计划
 
-- 流式回复、卡内图片资源、多角色会话
+- 流式回复、卡内图片资源
 - 多 agent 扮演（每个 NPC 一个 agent）与小说编辑团队
 - 小说↔酒馆设定互通、时间线拖动条、场景卡片看板
+- 消息编辑（DSH 会话为追加式，需 surface 替换方案，待后续版本）
 - npm 发布、一键安装、插件市场上架
 - 更多卡兼容性测试
 

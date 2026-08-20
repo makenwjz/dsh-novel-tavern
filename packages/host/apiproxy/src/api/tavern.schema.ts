@@ -31,6 +31,7 @@ const bindingWireSchema = z.object({
   disabledEntryNames: z.array(z.string()).optional(),
   mvuVariables: z.record(z.string(), z.string()).optional(),
   presetId: z.string().optional(),
+  persona: z.string().optional(),
 })
 
 /** tavern.listWorldBooks request payload (none). */
@@ -234,6 +235,28 @@ export const tavernSetMvuRequestSchema = z.object({
 export const tavernSetMvuValueSchema = z.object({
   binding: bindingWireSchema,
 }) as unknown as z.ZodType<Wire<ResponseValue<'tavern.setMvu'>>>
+
+/** tavern.setPersona request payload. */
+export const tavernSetPersonaRequestSchema = z.object({
+  sessionId: z.string(),
+  persona: z.string(),
+}) as unknown as z.ZodType<Wire<RequestPayload<'tavern.setPersona'>>>
+
+/** tavern.setPersona response value. */
+export const tavernSetPersonaValueSchema = z.object({
+  binding: bindingWireSchema,
+}) as unknown as z.ZodType<Wire<ResponseValue<'tavern.setPersona'>>>
+
+/** tavern.importChat request payload. */
+export const tavernImportChatRequestSchema = z.object({
+  sessionId: z.string(),
+  content: z.string(),
+}) as unknown as z.ZodType<Wire<RequestPayload<'tavern.importChat'>>>
+
+/** tavern.importChat response value. */
+export const tavernImportChatValueSchema = z.object({
+  imported: z.number().int().min(0),
+}) as unknown as z.ZodType<Wire<ResponseValue<'tavern.importChat'>>>
 
 /** tavern.scoreCharacter request payload. */
 export const tavernScoreCharacterRequestSchema = z.object({

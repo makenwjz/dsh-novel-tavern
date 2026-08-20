@@ -3013,6 +3013,8 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
       advanceStage: request => ok(request, { binding: { mode: 'novel', worldbookIds: [], characterId: null, stage: 1 } }),
       setGreeting: request => ok(request, { appended: true }),
       setMvu: request => ok(request, { binding: { mode: 'tavern', worldbookIds: [], characterId: null, mvuVariables: request.payload.variables } }),
+      importChat: request => ok(request, { imported: 2 }),
+      setPersona: request => ok(request, { binding: { mode: 'tavern', worldbookIds: [], characterId: null, persona: request.payload.persona } }),
       scoreCharacter: request => ok(request, { score: { overall: 8, clarity: 9, consistency: 7, tokenEfficiency: 6, note: 'ok' } }),
       projectTree: request => ok(request, { worldbooks: [], characters: [] }),
       characterImage: request => ok(request, { bytesB64: 'aGVsbG8=' }),

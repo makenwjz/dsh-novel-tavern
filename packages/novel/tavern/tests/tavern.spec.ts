@@ -249,6 +249,35 @@ describe('TavernService store', () => {
     expect(() => tavern.setMvuVariables('missing', {})).toThrow(/not attached/)
   })
 
+  it('stores and clears the per-session persona', async () => {
+    const { ctx, tavern } = await mount()
+    const session = bind(ctx, { mode: 'tavern', worldbookIds: [], characterId: null })
+    expect(tavern.setPersona(session.id, '我是深夜码字的用户，说话简短。').persona).toBe('我是深夜码字的用户，说话简短。')
+    expect(tavern.bindingOf(session.id)?.persona).toBe('我是深夜码字的用户，说话简短。')
+    // Blank clears the persona.
+    expect(tavern.bindingOf(tavern.setPersona(session.id, '   ').mode === 'tavern' ? session.id : session.id)?.persona).toBeUndefined()
+    expect(() => tavern.setPersona('missing', 'x')).toThrow(/not attached/)
+  })
+
+  it('imports a SillyTavern Chat JSONL export into a fresh session', async () => {
+    const { ctx, tavern } = await mount()
+    const session = bind(ctx, { mode: 'tavern', worldbookIds: [], characterId: null })
+    const jsonl = [
+      JSON.stringify({ chat_metadata: {}, char_name: 'Aya' }),
+      JSON.stringify({ name: 'Aya', is_user: false, mes: '你来了。' }),
+      JSON.stringify({ name: 'User', is_user: true, mes: '嗯。' }),
+      JSON.stringify({ name: 'Aya', is_user: false, mes: '那就开始吧。' }),
+      'not-json',
+      JSON.stringify({ name: 'Aya', is_user: false, mes: '' }),
+    ].join('\n')
+    expect(tavern.importChat(session.id, jsonl)).toBe(3)
+    const rows = session.events.filter(event => event.type === 'user/message' || event.type === 'assistant/message')
+    expect(rows.map(row => row.type)).toEqual(['assistant/message', 'user/message', 'assistant/message'])
+    // A session that already has messages refuses the import.
+    expect(() => tavern.importChat(session.id, jsonl)).toThrow(/already has messages/)
+    expect(() => tavern.importChat('missing', jsonl)).toThrow(/not attached/)
+  })
+
   it('imports, lists, and deletes prompt presets with bound-session guard', async () => {
     const { ctx, tavern } = await mount()
     const presetSource = JSON.stringify({

@@ -341,6 +341,12 @@ function fakeApi(overrides: Partial<{ muxFrames: MuxFrame[]; hostFrames: HostFra
       async setMvu(request) {
         return { rpcId: request.rpcId, result: { ok: true, value: { binding: { mode: 'tavern', worldbookIds: [], characterId: null } } } }
       },
+      async setPersona(request) {
+        return { rpcId: request.rpcId, result: { ok: true, value: { binding: { mode: 'tavern', worldbookIds: [], characterId: null, persona: request.payload.persona } } } }
+      },
+      async importChat(request) {
+        return { rpcId: request.rpcId, result: { ok: true, value: { imported: 2 } } }
+      },
       async setWorldBookEntryEnabled(request) {
         return { rpcId: request.rpcId, result: { ok: true, value: { updated: true } } }
       },
