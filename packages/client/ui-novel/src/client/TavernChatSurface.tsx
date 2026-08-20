@@ -18,6 +18,7 @@ import css from './TavernChat.module.css'
 export function TavernChatSurface({ useStore, actions, api, t, useSessions }: PropsStore<FloatingSurfaceStore> & PropsLocale<'settings.novel'> & InjectFace<NovelExplorerInjected> & { useSessions: TavernChatProps['useSessions'] }): ReactNode {
   const open = useStore(state => state.open)
   const view = useStore(state => state.view)
+  const focusSession = useStore(state => state.focusSession)
   if (!open || view !== 'chat') return null
   return (
     <div className={css.chatSurface} role="dialog" aria-label={t('chatView')}>
@@ -27,7 +28,7 @@ export function TavernChatSurface({ useStore, actions, api, t, useSessions }: Pr
         t={t as (key: NovelLocaleKey, params?: Record<string, unknown>) => string}
         useSessions={useSessions as never}
         onNeedLibrary={() => actions.openView('library')}
-        focusSession=""
+        focusSession={focusSession}
       />
     </div>
   )

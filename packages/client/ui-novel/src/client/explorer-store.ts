@@ -12,7 +12,7 @@ import { defineStore, type EngineStoreHandle } from '@deepseek-ai/dsh-client-run
 export type TavernView = 'library' | 'chat'
 
 /** Surface state: closed by default, seal pinned near the right edge. */
-type SurfaceState = { open: boolean; x: number; y: number; view: TavernView }
+type SurfaceState = { open: boolean; x: number; y: number; view: TavernView; focusSession: string }
 
 /** Annotation twin of the actions literal; drift fails at the defineStore call. */
 type SurfaceActions = {
@@ -20,6 +20,7 @@ type SurfaceActions = {
   move: (draft: SurfaceState, x: number, y: number) => void
   setView: (draft: SurfaceState, view: TavernView) => void
   openView: (draft: SurfaceState, view: TavernView) => void
+  setFocus: (draft: SurfaceState, sessionId: string) => void
 }
 
 /**
@@ -30,12 +31,13 @@ type SurfaceActions = {
  */
 export function createFloatingSurfaceStore(x: number, y: number): EngineStoreHandle<SurfaceState, SurfaceActions> {
   return defineStore({
-    init: (): SurfaceState => ({ open: false, x, y, view: 'library' }),
+    init: (): SurfaceState => ({ open: false, x, y, view: 'library', focusSession: '' }),
     actions: {
       toggle: (draft) => { draft.open = !draft.open },
       move: (draft, nextX, nextY) => { draft.x = nextX; draft.y = nextY },
       setView: (draft, view) => { draft.view = view },
       openView: (draft, view) => { draft.view = view; draft.open = true },
+      setFocus: (draft, sessionId) => { draft.focusSession = sessionId },
     },
   })
 }

@@ -243,27 +243,38 @@ export function NovelProjectExplorer({ useStore, actions, read, api, useSessions
   }
 
   /** Start a tavern chat with one character and its related worldbooks: bind,
-   *  write the opening greeting into the session, then open the chat surface. */
+   *  write the opening greeting into the session, then open the chat surface.
+   *  A fresh tavern session is always created, so the greeting lands first. */
   const startChatWithCharacter = (character: TavernCharacterRow): void => {
-    if (busy || sessionId === '') {
-      setNotice({ kind: 'error', text: t('chooseSession') })
-      return
-    }
+    if (busy) return
+    setBusy(true)
+    setNotice(null)
     const books = relatedWorldbooks(character)
     const greeting = character.greetings[0] ?? ''
-    runRoleplay(() => api.tavern.startRoleplay({
-      sessionId: sessionId as never,
-      characterIds: [character.id] as never,
-      worldbookIds: books.map(book => book.id) as never,
-    }).then((result) => {
-      if (!result.result.ok) throw new Error(result.result.error.message)
-      if (greeting.length === 0) return
-      return api.tavern.setGreeting({ sessionId: sessionId as never, greeting }).then((greetingResult) => {
-        if (!greetingResult.result.ok) throw new Error(greetingResult.result.error.message)
+    void api.sessions.create({ agentPreset: 'tavern' }).then(created => {
+      const createdResult = created.result
+      if (!createdResult.ok) throw new Error(createdResult.error.message)
+      const sid = createdResult.value.sessionId
+      return api.tavern.startRoleplay({
+        sessionId: sid as never,
+        characterIds: [character.id] as never,
+        worldbookIds: books.map(book => book.id) as never,
+      }).then(bound => {
+        if (!bound.result.ok) throw new Error(bound.result.error.message)
+        if (greeting.length === 0) return sid
+        return api.tavern.setGreeting({ sessionId: sid as never, greeting }).then(greetingResult => {
+          if (!greetingResult.result.ok) throw new Error(greetingResult.result.error.message)
+          return sid
+        })
       })
-    }).then(() => {
+    }).then(sid => {
+      actions.setFocus(sid)
       actions.openView('chat')
-    }))
+      setBusy(false)
+    }, (reason: unknown) => {
+      setBusy(false)
+      setNotice({ kind: 'error', text: t('importFailed', { reason: reason instanceof Error ? reason.message : String(reason) }) })
+    })
   }
 
   /** All regex/helper scripts across every imported card, for the rail list. */
@@ -1129,7 +1140,7 @@ export function NovelProjectExplorer({ useStore, actions, read, api, useSessions
                 <option key={id} value={id}>{sessions.byId[id]?.title ?? t('sessionTitle')}</option>
               ))}
             </select>
-            <button type="button" className={css.actionButton} disabled={busy || sessionId === ''} onClick={() => startChatWithCharacter(character)}>
+            <button type="button" className={css.actionButton} disabled={busy} onClick={() => startChatWithCharacter(character)}>
               {t('startChat')}
             </button>
             <button type="button" className={css.dangerButton} onClick={() => deleteCharacter(character.id, character.name)}>
