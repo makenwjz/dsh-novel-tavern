@@ -156,6 +156,8 @@ function scriptedApi(overrides: {
       advanceStage: r => ok(r, { binding: { mode: 'novel', worldbookIds: [], characterId: null } }),
       setGreeting: r => ok(r, { appended: true }),
       setMvu: r => ok(r, { binding: { mode: 'tavern', worldbookIds: [], characterId: null, mvuVariables: r.payload.variables } }),
+      setPersona: r => ok(r, { binding: { mode: 'tavern', worldbookIds: [], characterId: null, persona: r.payload.persona } }),
+      importChat: r => ok(r, { imported: 2 }),
       setWorldBookEntryEnabled: r => ok(r, { updated: true }),
       scoreCharacter: r => ok(r, { score: { overall: 8, clarity: 9, consistency: 7, tokenEfficiency: 6, note: 'ok' } }),
       projectTree: r => ok(r, { worldbooks: [], characters: [] }),
